@@ -1,0 +1,163 @@
+"""4D Scoring Matrix: evaluates commercial value of verified opportunities.
+
+S_total = (S_ROI * 0.40) + (S_Reputation * 0.30) + (S_Timeliness * 0.20) + (S_Strategy * 0.10)
+
+Scoring is done via LLM since it requires nuanced judgment about
+funding amounts, reputation, and strategic context.
+"""
+import logging
+from datetime import datetime, timezone
+from typing import Dict, Any, Optional
+
+from config.settings import settings
+from .llm_gateway import LLMGateway
+from .prompts import SCORE_SYSTEM, SCORE_USER_TEMPLATE
+
+logger = logging.getLogger(__name__)
+
+
+class OpportunityScorer:
+    """Scores verified opportunities across 4 dimensions using LLM + inline heuristics."""
+
+    WEIGHTS = settings.SCORE_WEIGHTS  # {"roi": 0.40, "reputation": 0.30, "timeliness": 0.20, "strategy": 0.10}
+
+    def __init__(self, llm_gateway: LLMGateway):
+        self.llm = llm_gateway
+
+    def score(self, event_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Score an opportunity. Returns merged event_data with scoring fields.
+
+        Falls back to heuristic scoring if LLM fails.
+        """
+        # Prepare prompt data
+        deadline = event_data.get("deadline")
+        deadline_str = str(deadline) if deadline else "not specified"
+
+        prompt = SCORE_USER_TEMPLATE.format(
+            category=event_data.get("event_type", ""),
+            title=event_data.get("title", ""),
+            description=event_data.get("description", "")[:1000],
+            deadline=deadline_str,
+            amount=event_data.get("amount", "not specified"),
+            ecosystem=event_data.get("ecosystem", ""),
+            track=event_data.get("track", ""),
+            platform=event_data.get("source_platform", ""),
+        )
+
+        result = self.llm.classify_structured(SCORE_SYSTEM, prompt)
+
+        if result and all(k in result for k in ["score_roi", "score_reputation",
+                                                  "score_timeliness", "score_strategy"]):
+            # Compute weighted final score
+            final = (
+                result["score_roi"] * self.WEIGHTS["roi"]
+                + result["score_reputation"] * self.WEIGHTS["reputation"]
+                + result["score_timeliness"] * self.WEIGHTS["timeliness"]
+                + result["score_strategy"] * self.WEIGHTS["strategy"]
+            )
+            event_data["score_roi"] = result["score_roi"]
+            event_data["score_reputation"] = result["score_reputation"]
+            event_data["score_timeliness"] = result["score_timeliness"]
+            event_data["score_strategy"] = result["score_strategy"]
+            event_data["final_score"] = round(final, 2)
+            return event_data
+
+        # Fallback: heuristic scoring
+        logger.warning("LLM scoring failed, using heuristic fallback")
+        return self._heuristic_score(event_data)
+
+    def _heuristic_score(self, event_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Basic heuristic scoring when LLM fails."""
+        amount = event_data.get("amount", "") or ""
+        event_type = event_data.get("event_type", "")
+        ecosystem = event_data.get("ecosystem", "") or ""
+
+        # ROI heuristic: try to parse amount
+        score_roi = 5.0
+        try:
+            amount_lower = amount.lower().replace(",", "")
+            # Extract numbers
+            import re
+            nums = re.findall(r'[\d,]+', amount_lower)
+            if nums:
+                max_val = max(int(n.replace(",", "")) for n in nums)
+                if "eth" in amount_lower or "btc" in amount_lower:
+                    max_val *= 3000  # rough conversion
+                if max_val >= 100000:
+                    score_roi = 9.0
+                elif max_val >= 50000:
+                    score_roi = 8.0
+                elif max_val >= 20000:
+                    score_roi = 7.0
+                elif max_val >= 5000:
+                    score_roi = 6.0
+                elif max_val >= 1000:
+                    score_roi = 5.0
+                else:
+                    score_roi = 3.0
+        except Exception:
+            pass
+
+        # Reputation heuristic: known ecosystems score higher
+        tier1 = {"ethereum", "solana", "sui", "base", "arbitrum", "optimism", "polygon", "stellar"}
+        score_reputation = 8.0 if ecosystem.lower() in tier1 else 5.0
+
+        # Timeliness heuristic: check deadline proximity
+        score_timeliness = 7.0
+        deadline = event_data.get("deadline")
+        if deadline:
+            try:
+                if isinstance(deadline, str):
+                    deadline = datetime.fromisoformat(deadline.replace("Z", "+00:00"))
+                now = datetime.now(timezone.utc)
+                days_left = (deadline - now).days
+                if days_left <= 0:
+                    score_timeliness = 1.0
+                elif days_left <= 1:
+                    score_timeliness = 3.0
+                elif days_left <= 7:
+                    score_timeliness = 5.0
+                elif 14 <= days_left <= 30:
+                    score_timeliness = 9.0
+                else:
+                    score_timeliness = 7.0
+            except Exception:
+                pass
+        else:
+            # No deadline — could be rolling, modest score
+            score_timeliness = 5.0
+
+        # Strategy heuristic: grants and hackathons tend to have more ecosystem value
+        score_strategy = 6.0
+        if event_type == "GRANT":
+            score_strategy = 7.0
+        elif event_type == "HACKATHON":
+            score_strategy = 7.5
+
+        final = (
+            score_roi * self.WEIGHTS["roi"]
+            + score_reputation * self.WEIGHTS["reputation"]
+            + score_timeliness * self.WEIGHTS["timeliness"]
+            + score_strategy * self.WEIGHTS["strategy"]
+        )
+
+        event_data["score_roi"] = round(score_roi, 1)
+        event_data["score_reputation"] = round(score_reputation, 1)
+        event_data["score_timeliness"] = round(score_timeliness, 1)
+        event_data["score_strategy"] = round(score_strategy, 1)
+        event_data["final_score"] = round(final, 2)
+        return event_data
+
+
+def stars_from_score(score: float) -> str:
+    """Convert a 1-10 score to star rating."""
+    if score >= 9:
+        return "⭐⭐⭐⭐⭐"
+    elif score >= 8:
+        return "⭐⭐⭐⭐"
+    elif score >= 7:
+        return "⭐⭐⭐"
+    elif score >= 5:
+        return "⭐⭐"
+    else:
+        return "⭐"

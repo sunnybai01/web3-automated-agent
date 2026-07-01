@@ -1,0 +1,141 @@
+# Keyword rules for coarse filtering (wide recall — better more than less)
+# Content matching these keywords passes to LLM for fine classification
+
+keywords:
+  # Grant-related
+  grant:
+    - grant
+    - grants
+    - funding
+    - funded
+    - RFP
+    - request for proposal
+    - request for proposals
+    - call for proposals
+    - CFP
+    - ecosystem fund
+    - foundation grant
+    - community fund
+    - builder fund
+    - developer fund
+    - dev fund
+    - research grant
+    - fellowship
+    - scholars program
+    - accelerator
+    - incubator
+    - seed funding
+    - QF
+    - quadratic funding
+    - retroactive
+    - retro funding
+    - RPGF
+    - retroPGF
+    - 资助
+    - 基金
+    - 拨款
+
+  # Hackathon-related
+  hackathon:
+    - hackathon
+    - hack
+    - hackfest
+    - buildathon
+    - code sprint
+    - code jam
+    - game jam
+    - hack week
+    - build week
+    - hacker house
+    - builder house
+    - demo day
+    - pitch competition
+    - startup weekend
+    - ideathon
+    - ETHGlobal
+    - ethglobal
+    - ETHDenver
+    - ETHSF
+    - Superhack
+    - Scaling Ethereum
+    - 黑客松
+    - 黑客马拉松
+    - 编程马拉松
+
+  # Bounty-related
+  bounty:
+    - bounty
+    - bug bounty
+    - bug bounties
+    - vulnerability bounty
+    - security bounty
+    - reward
+    - rewards program
+    - bug fix reward
+    - whitehat
+    - responsible disclosure
+    - paid task
+    - contribution reward
+    - contributor reward
+    - task reward
+    - gig
+    - bounty hunter
+    - bounty board
+    - bounty program
+    - immunefi
+    - hackerone
+    - bugcrowd
+    - 赏金
+    - 漏洞赏金
+    - 任务奖励
+
+  # General signal words (increase recall)
+  general:
+    - apply now
+    - applications open
+    - submission deadline
+    - deadline
+    - prize pool
+    - prize
+    - award
+    - winners
+    - selected projects
+    - grant round
+    - wave
+    - cohort
+    - call for builders
+    - call for developers
+    - open call
+    - application period
+    - doraHacks
+    - devpost
+    - Gitcoin
+    - quest
+    - mission
+    - 总奖池
+    - 奖金
+    - 申请
+    - 报名
+    - 截止
+
+  # Negative keywords (reject immediately — noise)
+  negative:
+    - airdrop
+    - giveaway
+    - free mint
+    - whitelist
+    - WL giveaway
+    - NFT giveaway
+    - presale
+    - launchpad sale
+    - token sale
+    - public sale
+    - 空投
+    - 免费铸造
+    - 抽奖
+
+# Compilation flags
+flags:
+  case_sensitive: false
+  match_partial: true
+  min_keyword_hits: 2  # at least 2 keyword matches to pass coarse filter

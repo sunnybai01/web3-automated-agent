@@ -1,0 +1,51 @@
+services:
+  agent-app:
+    build: .
+    container_name: web3_agent_main
+    volumes:
+      - .:/app
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+    restart: unless-stopped
+    command: python -m src.main
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: web3_agent_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-web3agent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-web3agent}
+      POSTGRES_DB: ${POSTGRES_DB:-web3agent}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-web3agent}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: web3_agent_chromadb
+    ports:
+      - "8001:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+
+volumes:
+  pgdata:
+  chroma_data:

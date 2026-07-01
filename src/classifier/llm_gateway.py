@@ -1,0 +1,184 @@
+"""Self-built thin LLM Gateway — unified interface over DeepSeek/Qwen/Gemini.
+
+Uses OpenAI-compatible SDK for DeepSeek and Qwen, and Google genai SDK for Gemini.
+Supports automatic fallback through the configured provider priority list.
+"""
+import logging
+import json
+from typing import Optional, Dict, Any
+
+from openai import OpenAI
+
+from config.settings import settings
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Provider registry — each entry produces an OpenAI-compatible client + model id
+# ---------------------------------------------------------------------------
+
+PROVIDER_CONFIG = {
+    "deepseek": {
+        "api_key": lambda: settings.DEEPSEEK_API_KEY,
+        "base_url": lambda: settings.DEEPSEEK_BASE_URL,
+        "model": "deepseek-chat",
+        "create_client": lambda: OpenAI(
+            api_key=settings.DEEPSEEK_API_KEY,
+            base_url=settings.DEEPSEEK_BASE_URL,
+        ),
+    },
+    "qwen": {
+        "api_key": lambda: settings.QWEN_API_KEY,
+        "base_url": lambda: settings.QWEN_BASE_URL,
+        "model": "qwen-turbo-latest",
+        "create_client": lambda: OpenAI(
+            api_key=settings.QWEN_API_KEY,
+            base_url=settings.QWEN_BASE_URL,
+        ),
+    },
+    "gemini": {
+        "api_key": lambda: settings.GEMINI_API_KEY,
+        "base_url": lambda: settings.GEMINI_BASE_URL,
+        "model": "gemini-2.0-flash-lite",
+        "create_client": lambda: None,  # Gemini uses different SDK path
+    },
+}
+
+# Parse priority order
+PROVIDER_PRIORITY = [
+    p.strip()
+    for p in settings.LLM_PROVIDER_PRIORITY.split(",")
+    if p.strip() in PROVIDER_CONFIG
+]
+
+
+class LLMGateway:
+    """Unified LLM caller with automatic fallback across providers."""
+
+    def __init__(self):
+        self._clients: Dict[str, Any] = {}
+        for name, cfg in PROVIDER_CONFIG.items():
+            api_key = cfg["api_key"]()
+            if not api_key:
+                continue
+            if name == "gemini":
+                self._clients[name] = self._init_gemini(api_key)
+            else:
+                self._clients[name] = cfg["create_client"]()
+
+        if not self._clients:
+            logger.warning("No LLM providers configured — LLM gateway will fail!")
+
+    def _init_gemini(self, api_key: str):
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=api_key)
+            return genai
+        except ImportError:
+            logger.error("google-generativeai not installed")
+            return None
+
+    def complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        json_mode: bool = False,
+        temperature: float = 0.1,
+        max_tokens: int = 2048,
+    ) -> Optional[str]:
+        """Send a chat completion, falling back through providers on failure.
+
+        Returns the model's text response, or None if all providers fail.
+        """
+        for provider_name in PROVIDER_PRIORITY:
+            if provider_name not in self._clients:
+                continue
+
+            try:
+                if provider_name == "gemini":
+                    result = self._call_gemini(
+                        provider_name, system_prompt, user_prompt,
+                        json_mode, temperature, max_tokens,
+                    )
+                else:
+                    result = self._call_openai_compatible(
+                        provider_name, system_prompt, user_prompt,
+                        json_mode, temperature, max_tokens,
+                    )
+
+                if result:
+                    return result
+
+            except Exception as e:
+                logger.warning(f"LLM provider '{provider_name}' failed: {e}")
+                continue
+
+        logger.error("All LLM providers exhausted — returning None")
+        return None
+
+    def _call_openai_compatible(
+        self, provider: str, system: str, user: str,
+        json_mode: bool, temperature: float, max_tokens: int,
+    ) -> Optional[str]:
+        client = self._clients[provider]
+        model = PROVIDER_CONFIG[provider]["model"]
+
+        kwargs = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+
+        if json_mode:
+            kwargs["response_format"] = {"type": "json_object"}
+
+        resp = client.chat.completions.create(**kwargs)
+        return resp.choices[0].message.content
+
+    def _call_gemini(
+        self, provider: str, system: str, user: str,
+        json_mode: bool, temperature: float, max_tokens: int,
+    ) -> Optional[str]:
+        genai = self._clients[provider]
+        model_id = PROVIDER_CONFIG[provider]["model"]
+
+        model = genai.GenerativeModel(
+            model_id,
+            system_instruction=system,
+        )
+
+        generation_config = {
+            "temperature": temperature,
+            "max_output_tokens": max_tokens,
+        }
+
+        if json_mode:
+            generation_config["response_mime_type"] = "application/json"
+
+        resp = model.generate_content(
+            user,
+            generation_config=genai.GenerationConfig(**generation_config),
+        )
+        return resp.text
+
+    def classify_structured(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Call LLM with JSON mode and parse the result into a dict.
+
+        Returns None if the output is unparseable.
+        """
+        raw = self.complete(system_prompt, user_prompt, json_mode=True)
+        if not raw:
+            return None
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            logger.error(f"LLM returned invalid JSON: {raw[:200]}")
+            return None
