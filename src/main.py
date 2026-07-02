@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from config.settings import settings
 from src.db.database import init_db, SessionLocal
 from src.fetchers.builder import load_sources_config, build_registry
+from src.fetchers.base import get_fetch_skip_reason
 from src.dedup.url_dedup import process_item_l1
 from src.dedup.content_dedup import ContentDeduplicator
 from src.dedup.vector_store import VectorStore
@@ -22,8 +23,10 @@ from src.dispatch.slack_client import SlackDispatcher
 from src.dispatch.report_writer import generate_report
 from src.dispatch.heartbeat import heartbeat, increment_stat, reset_daily_stats
 from src.scheduler.jobs import create_scheduler, register_jobs
+from scripts.sync_defillama_chains import sync_candidate_snapshot
 from src.db.queries import (
     upsert_source_health,
+    get_source_health,
     create_schedule_log,
     finish_schedule_log,
     update_event,
@@ -89,16 +92,26 @@ def run_pipeline(schedule: str):
     log = create_schedule_log(db, f"pipeline_{schedule}")
     stats = {"fetched": 0, "new": 0, "deduped": 0, "classified": 0,
              "verified": 0, "fraud": 0, "pushed": 0}
+    result = None
 
     try:
         # --- Phase 1: Fetch ---
-        items, source_status = _fetcher_registry.fetch_all_with_status(schedule)
+        def _should_skip_fetch(name, fetcher):
+            health = get_source_health(db, name)
+            return get_fetch_skip_reason(fetcher.config, health)
+
+        items, source_status = _fetcher_registry.fetch_all_with_status(
+            schedule,
+            should_skip=_should_skip_fetch,
+        )
         stats["fetched"] = len(items)
         increment_stat("fetched", len(items))
         logger.info(f"[{schedule}] Fetched {len(items)} items from {len(_fetcher_registry._fetchers)} sources")
 
         # Update source health at source-level granularity
         for name, status in source_status.items():
+            if status.get("skipped"):
+                continue
             upsert_source_health(
                 db,
                 name,
@@ -125,6 +138,13 @@ def run_pipeline(schedule: str):
                 continue
             stats["classified"] += 1
 
+            source_metadata = {
+                "chain": item.metadata.get("chain"),
+                "source_tier": item.metadata.get("source_tier"),
+                "official": item.metadata.get("official"),
+                "signal_type": item.metadata.get("signal_type"),
+            }
+
             # --- Phase 4: L2 Semantic Dedup ---
             event_data = {
                 "event_type": category.lower(),
@@ -136,7 +156,8 @@ def run_pipeline(schedule: str):
                 "ecosystem": structured.get("ecosystem"),
                 "application_url": structured.get("application_url"),
                 "source_url": item.raw_url,
-                "source_platform": structured.get("source_platform"),
+                "source_platform": structured.get("source_platform") or item.source_name,
+                **source_metadata,
             }
 
             event_id, is_new = _deduplicator.check_and_process(
@@ -158,9 +179,10 @@ def run_pipeline(schedule: str):
             # --- Phase 5: Zero-trust Verification ---
             verification = verify_opportunity(
                 event_type=category.lower(),
-                source_url=structured.get("application_url") or item.raw_url,
+                source_url=item.raw_url,
                 application_url=structured.get("application_url", ""),
                 source_name=item.source_name,
+                metadata=item.metadata,
             )
 
             if verification["verdict"] == "fraud":
@@ -172,6 +194,8 @@ def run_pipeline(schedule: str):
 
             stats["verified"] += 1
             increment_stat("verified")
+            event_data["verification_verdict"] = verification["verdict"]
+            event_data["verification_log"] = verification["verification_log"]
 
             # --- Phase 6: Scoring ---
             scored = _scorer.score(event_data)
@@ -222,6 +246,7 @@ def run_pipeline(schedule: str):
                            items_classified=stats["classified"],
                            items_verified=stats["verified"])
         logger.info(f"[{schedule}] Complete: {stats}")
+        result = {"status": "success", **stats}
 
     except Exception as e:
         logger.exception(f"[{schedule}] Pipeline failed: {e}")
@@ -229,9 +254,12 @@ def run_pipeline(schedule: str):
         # Update source health for failed sources
         for name in _fetcher_registry._fetchers:
             upsert_source_health(db, name, success=False, error=str(e))
+        result = {"status": "failed", "error": str(e), **stats}
 
     finally:
         db.close()
+
+    return result
 
 
 def run_heartbeat():
@@ -247,6 +275,15 @@ def run_heartbeat():
     heartbeat(_hb_slack)
 
 
+def run_defillama_candidate_sync():
+    """Refresh the DefiLlama candidate chain snapshot on schedule."""
+    snapshot = sync_candidate_snapshot()
+    logger.info(
+        "DefiLlama candidate sync complete: %s chains",
+        len(snapshot.get("candidate_chains", [])),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -259,7 +296,7 @@ def main():
 
     # Create scheduler
     scheduler = create_scheduler()
-    register_jobs(scheduler, run_pipeline, run_heartbeat)
+    register_jobs(scheduler, run_pipeline, run_heartbeat, run_defillama_candidate_sync)
     scheduler.start()
     logger.info("Scheduler started — waiting for jobs...")
 

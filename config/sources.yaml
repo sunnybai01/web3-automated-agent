@@ -1,5 +1,12 @@
 # Web3 Intelligence Agent — Seed Source Configuration
-# Each source defines: type, url, fetch_method, schedule, keywords, ecosystem
+# Each source defines: type, url, fetch_method, schedule, keywords, ecosystem.
+# Chain-aware metadata is now supported:
+# - chain: canonical ecosystem id used by downstream registry-aware logic
+# - source_tier: official | discovery
+# - signal_type: grant | hackathon | bounty | social | discovery
+# - official: convenience boolean for trust-aware processing
+# Existing entries remain backward compatible because these fields are inferred
+# at load time when omitted.
 
 sources:
   # =========================================================================
@@ -12,8 +19,12 @@ sources:
     schedule: grant_hackathon
     category: grant
     ecosystem: ethereum
+    chain: ethereum
     fetch_method: rss
-    enabled: true
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: false
 
   - name: gitcoin_blog
     type: rss
@@ -21,8 +32,12 @@ sources:
     schedule: grant_hackathon
     category: grant
     ecosystem: multi
+    chain: multi
     fetch_method: rss
-    enabled: true
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: false
 
   - name: optimism_rpgf
     type: rss
@@ -30,8 +45,12 @@ sources:
     schedule: grant_hackathon
     category: grant
     ecosystem: optimism
+    chain: optimism
     fetch_method: rss
-    enabled: true
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: false
 
   - name: uniswap_foundation
     type: rss
@@ -39,8 +58,12 @@ sources:
     schedule: grant_hackathon
     category: grant
     ecosystem: ethereum
+    chain: ethereum
     fetch_method: rss
-    enabled: true
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: false
 
   - name: solana_foundation
     type: rss
@@ -48,8 +71,12 @@ sources:
     schedule: grant_hackathon
     category: grant
     ecosystem: solana
+    chain: solana
     fetch_method: rss
-    enabled: true
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: false
 
   - name: aave_governance
     type: rss
@@ -57,8 +84,12 @@ sources:
     schedule: grant_hackathon
     category: grant
     ecosystem: ethereum
+    chain: ethereum
     fetch_method: rss
-    enabled: true
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: false
 
   - name: polygon_village
     type: rss
@@ -66,8 +97,12 @@ sources:
     schedule: grant_hackathon
     category: grant
     ecosystem: polygon
+    chain: polygon
     fetch_method: rss
-    enabled: true
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: false
 
   - name: starknet_foundation
     type: rss
@@ -75,8 +110,12 @@ sources:
     schedule: grant_hackathon
     category: grant
     ecosystem: starknet
+    chain: starknet
     fetch_method: rss
-    enabled: true
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: false
 
   - name: arweave_grants
     type: rss
@@ -84,8 +123,12 @@ sources:
     schedule: grant_hackathon
     category: grant
     ecosystem: arweave
+    chain: arweave
     fetch_method: rss
-    enabled: true
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: false
 
   - name: near_foundation
     type: rss
@@ -93,8 +136,12 @@ sources:
     schedule: grant_hackathon
     category: grant
     ecosystem: near
+    chain: near
     fetch_method: rss
-    enabled: true
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: false
 
   - name: aptos_foundation
     type: rss
@@ -102,7 +149,12 @@ sources:
     schedule: grant_hackathon
     category: grant
     ecosystem: aptos
+    chain: aptos
     fetch_method: rss
+    source_tier: official
+    signal_type: grant
+    official: true
+    rate_limit_cooldown_minutes: 1440
     enabled: true
 
   - name: stellar_community_fund
@@ -111,8 +163,12 @@ sources:
     schedule: grant_hackathon
     category: grant
     ecosystem: stellar
+    chain: stellar
     fetch_method: rss
-    enabled: true
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: false
 
   - name: sui_foundation
     type: rss
@@ -120,8 +176,90 @@ sources:
     schedule: grant_hackathon
     category: grant
     ecosystem: sui
+    chain: sui
     fetch_method: rss
+    source_tier: official
+    signal_type: grant
+    official: true
     enabled: true
+
+  - name: base_blog
+    type: rss
+    url: https://blog.base.dev/rss
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: base
+    chain: base
+    fetch_method: rss
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: false
+
+  - name: base_grants
+    type: rss
+    url: https://paragraph.com/api/blogs/rss/%40grants.base.eth
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: base
+    chain: base
+    fetch_method: rss
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: false
+
+  - name: arbitrum_grants
+    type: web_scraper
+    url: https://arbitrum.foundation/grants
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: arbitrum
+    chain: arbitrum
+    fetch_method: web_scraper
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: true
+
+  - name: polygon_blog
+    type: web_scraper
+    url: https://polygon.technology/blog
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: polygon
+    chain: polygon
+    fetch_method: web_scraper
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: false
+
+  - name: avalanche_builder_grants
+    type: web_scraper
+    url: https://build.avax.network/grants/team1-mini-grants
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: avalanche
+    chain: avalanche
+    fetch_method: web_scraper
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: true
+
+  - name: avalanche_blog
+    type: web_scraper
+    url: https://www.avax.network/about/blog
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: avalanche
+    chain: avalanche
+    fetch_method: web_scraper
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: false
 
   # =========================================================================
   # Hackathons — Daily (09:00, 21:00)
@@ -133,8 +271,12 @@ sources:
     schedule: grant_hackathon
     category: hackathon
     ecosystem: ethereum
+    chain: multi
     fetch_method: rss
-    enabled: true
+    source_tier: discovery
+    signal_type: hackathon
+    official: false
+    enabled: false
 
   - name: dorahacks
     type: rss
@@ -142,8 +284,12 @@ sources:
     schedule: grant_hackathon
     category: hackathon
     ecosystem: multi
+    chain: multi
     fetch_method: rss
-    enabled: true
+    source_tier: discovery
+    signal_type: hackathon
+    official: false
+    enabled: false
 
   - name: devpost_web3
     type: rss
@@ -151,8 +297,12 @@ sources:
     schedule: grant_hackathon
     category: hackathon
     ecosystem: multi
+    chain: multi
     fetch_method: rss
-    enabled: true
+    source_tier: discovery
+    signal_type: hackathon
+    official: false
+    enabled: false
 
   - name: solana_hyperdrive
     type: web_scraper
@@ -160,7 +310,11 @@ sources:
     schedule: grant_hackathon
     category: hackathon
     ecosystem: solana
+    chain: solana
     fetch_method: web_scraper
+    source_tier: official
+    signal_type: hackathon
+    official: true
     enabled: true
 
   - name: sui_overflow
@@ -169,8 +323,38 @@ sources:
     schedule: grant_hackathon
     category: hackathon
     ecosystem: sui
+    chain: sui
     fetch_method: rss
+    source_tier: official
+    signal_type: hackathon
+    official: true
     enabled: true
+
+  - name: arbitrum_foundation_blog
+    type: web_scraper
+    url: https://blog.arbitrum.foundation/
+    schedule: grant_hackathon
+    category: hackathon
+    ecosystem: arbitrum
+    chain: arbitrum
+    fetch_method: web_scraper
+    source_tier: official
+    signal_type: hackathon
+    official: true
+    enabled: true
+
+  - name: avalanche_builder_hackathons
+    type: web_scraper
+    url: https://build.avax.network/hackathons
+    schedule: grant_hackathon
+    category: hackathon
+    ecosystem: avalanche
+    chain: avalanche
+    fetch_method: web_scraper
+    source_tier: official
+    signal_type: hackathon
+    official: true
+    enabled: false
 
   # ----- Tavily discovery (grants & hackathons not covered by any feed) -----
   - name: tavily_grants_discovery
@@ -179,7 +363,11 @@ sources:
     schedule: grant_hackathon
     category: grant
     ecosystem: multi
+    chain: multi
     fetch_method: tavily_search
+    source_tier: discovery
+    signal_type: discovery
+    official: false
     query: "new web3 blockchain grant program now accepting applications"
     max_results: 5
     search_depth: advanced
@@ -193,7 +381,11 @@ sources:
     schedule: grant_hackathon
     category: hackathon
     ecosystem: multi
+    chain: multi
     fetch_method: tavily_search
+    source_tier: discovery
+    signal_type: discovery
+    official: false
     query: "upcoming web3 crypto hackathon registration open 2026 prize pool"
     max_results: 5
     search_depth: advanced
@@ -212,7 +404,7 @@ sources:
     category: bounty
     ecosystem: multi
     fetch_method: rss
-    enabled: true
+    enabled: false
 
   - name: gitcoin_bounties
     type: rss
@@ -221,7 +413,7 @@ sources:
     category: bounty
     ecosystem: multi
     fetch_method: rss
-    enabled: true
+    enabled: false
 
   - name: hackerone_web3
     type: rss
@@ -230,7 +422,7 @@ sources:
     category: bounty
     ecosystem: multi
     fetch_method: rss
-    enabled: true
+    enabled: false
 
   - name: github_bounty_label
     type: github
@@ -307,6 +499,8 @@ sources:
 
   # =========================================================================
   # Twitter/X — via RSSHub bridge (daily)
+  # NOTE: Temporarily disabled due to rsshub.app /twitter/user/* upstream
+  # redirecting to google.com/404 (2026-07-02).
   # =========================================================================
 
   - name: twitter_gitcoin
@@ -316,7 +510,7 @@ sources:
     category: social
     ecosystem: multi
     fetch_method: rsshub
-    enabled: true
+    enabled: false
 
   - name: twitter_ethglobal
     type: rsshub
@@ -325,7 +519,7 @@ sources:
     category: social
     ecosystem: ethereum
     fetch_method: rsshub
-    enabled: true
+    enabled: false
 
   - name: twitter_ef_esp
     type: rsshub
@@ -334,7 +528,7 @@ sources:
     category: social
     ecosystem: ethereum
     fetch_method: rsshub
-    enabled: true
+    enabled: false
 
   - name: twitter_optimism
     type: rsshub
@@ -343,7 +537,7 @@ sources:
     category: social
     ecosystem: optimism
     fetch_method: rsshub
-    enabled: true
+    enabled: false
 
   - name: twitter_solanafndn
     type: rsshub
@@ -352,7 +546,7 @@ sources:
     category: social
     ecosystem: solana
     fetch_method: rsshub
-    enabled: true
+    enabled: false
 
   - name: twitter_immunefi
     type: rsshub
@@ -361,7 +555,7 @@ sources:
     category: social
     ecosystem: multi
     fetch_method: rsshub
-    enabled: true
+    enabled: false
 
   - name: twitter_suinetwork
     type: rsshub
@@ -370,7 +564,7 @@ sources:
     category: social
     ecosystem: sui
     fetch_method: rsshub
-    enabled: true
+    enabled: false
 
   - name: twitter_stellarorg
     type: rsshub
@@ -379,7 +573,7 @@ sources:
     category: social
     ecosystem: stellar
     fetch_method: rsshub
-    enabled: true
+    enabled: false
 
   - name: twitter_dorahacks
     type: rsshub
@@ -388,7 +582,7 @@ sources:
     category: social
     ecosystem: multi
     fetch_method: rsshub
-    enabled: true
+    enabled: false
 
   - name: twitter_aptos
     type: rsshub
@@ -397,7 +591,7 @@ sources:
     category: social
     ecosystem: aptos
     fetch_method: rsshub
-    enabled: true
+    enabled: false
 
   - name: twitter_starknet
     type: rsshub
@@ -406,7 +600,7 @@ sources:
     category: social
     ecosystem: starknet
     fetch_method: rsshub
-    enabled: true
+    enabled: false
 
   - name: twitter_polygon
     type: rsshub
@@ -415,7 +609,7 @@ sources:
     category: social
     ecosystem: polygon
     fetch_method: rsshub
-    enabled: true
+    enabled: false
 
   - name: twitter_uniswap
     type: rsshub
@@ -424,7 +618,7 @@ sources:
     category: social
     ecosystem: ethereum
     fetch_method: rsshub
-    enabled: true
+    enabled: false
 
   - name: twitter_superteamdao
     type: rsshub
@@ -433,7 +627,7 @@ sources:
     category: social
     ecosystem: solana
     fetch_method: rsshub
-    enabled: true
+    enabled: false
 
   - name: twitter_aave
     type: rsshub
@@ -442,7 +636,7 @@ sources:
     category: social
     ecosystem: ethereum
     fetch_method: rsshub
-    enabled: true
+    enabled: false
 
   # =========================================================================
   # Discord — Bot listener (real-time)

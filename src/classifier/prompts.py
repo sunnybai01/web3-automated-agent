@@ -42,6 +42,8 @@ SCORE_SYSTEM = """You are a Web3 investment analyst. Evaluate the commercial val
 
 Scoring scale: 1-10 for each dimension. Be strict — most opportunities should score 5-7. Only truly exceptional opportunities score 9-10.
 
+Source trust context matters: opportunities published on approved official ecosystem sources deserve higher reputation confidence than items discovered only through aggregators or social discovery feeds.
+
 Dimensions:
 1. ROI (40% weight): How lucrative is this? $30k+ grants, $200k+ hackathon prize pools, or $120+/hr equivalent bounties score high. Low-pay, high-effort tasks score low.
 2. Reputation (30% weight): Is the sponsor a top-tier L1/L2 foundation or blue-chip protocol (Ethereum, Solana, Base, Uniswap, Aave)? Anonymous teams with no backing score low.
@@ -58,6 +60,9 @@ Amount: {amount}
 Ecosystem: {ecosystem}
 Track: {track}
 Platform: {platform}
+Source tier: {source_tier}
+Official source: {official}
+Verification verdict: {verification_verdict}
 
 Return JSON:
 {{

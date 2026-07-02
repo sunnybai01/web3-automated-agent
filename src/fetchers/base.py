@@ -1,4 +1,5 @@
 """Abstract base fetcher — all fetchers inherit from this."""
+import datetime as dt
 import logging
 import time
 from abc import ABC, abstractmethod
@@ -24,6 +25,37 @@ class FetchedItem:
 
 class FetchError(Exception):
     """Non-retryable fetch error."""
+
+
+def get_fetch_skip_reason(
+    config: Dict[str, Any],
+    health: Optional[Any],
+    now: Optional[dt.datetime] = None,
+) -> Optional[str]:
+    """Return a short skip reason when a source is cooling down.
+
+    The caller can use this to suppress repeated fetches for sources that are
+    currently rate limited or already marked down.
+    """
+    if health is None or health.last_fetch_at is None:
+        return None
+
+    now = now or dt.datetime.now(dt.timezone.utc)
+    last_error = (getattr(health, "last_error", "") or "").lower()
+    rate_limit_cooldown = int(config.get("rate_limit_cooldown_minutes", 0) or 0)
+    failure_cooldown = int(config.get("failure_cooldown_minutes", 0) or 0)
+
+    if "429" in last_error and rate_limit_cooldown > 0:
+        retry_at = health.last_fetch_at + dt.timedelta(minutes=rate_limit_cooldown)
+        if now < retry_at:
+            return "rate_limited_cooldown"
+
+    if getattr(health, "status", None) == "down" and failure_cooldown > 0:
+        retry_at = health.last_fetch_at + dt.timedelta(minutes=failure_cooldown)
+        if now < retry_at:
+            return "failed_source_cooldown"
+
+    return None
 
 
 class BaseFetcher(ABC):
@@ -91,7 +123,7 @@ class FetcherRegistry:
         all_items, _ = self.fetch_all_with_status(schedule)
         return all_items
 
-    def fetch_all_with_status(self, schedule: str):
+    def fetch_all_with_status(self, schedule: str, should_skip=None):
         """Fetch from all sources matching a schedule and return per-source status.
 
         Returns:
@@ -107,6 +139,17 @@ class FetcherRegistry:
             if fetcher.config.get("schedule") != schedule:
                 continue
 
+            skip_reason = should_skip(name, fetcher) if should_skip else None
+            if skip_reason:
+                source_status[name] = {
+                    "success": None,
+                    "items": 0,
+                    "error": None,
+                    "skipped": skip_reason,
+                }
+                logger.info(f"  {name}: SKIPPED — {skip_reason}")
+                continue
+
             try:
                 logger.info(f"Fetching from {name}...")
                 items = fetcher.fetch()
@@ -115,6 +158,7 @@ class FetcherRegistry:
                     "success": True,
                     "items": len(items),
                     "error": None,
+                    "skipped": None,
                 }
                 logger.info(f"  {name}: {len(items)} items")
             except Exception as e:
@@ -122,6 +166,7 @@ class FetcherRegistry:
                     "success": False,
                     "items": 0,
                     "error": str(e),
+                    "skipped": None,
                 }
                 logger.error(f"  {name}: FAILED — {e}")
 

@@ -1,10 +1,9 @@
 """APScheduler job definitions — split frequency for Grant/Hackathon vs Bounty."""
 import logging
-from datetime import datetime
-from typing import Dict, Any
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from config.settings import settings
 
@@ -14,6 +13,13 @@ logger = logging.getLogger(__name__)
 GRANT_HACKATHON_SCHEDULE = "0 9,21 * * *"   # 09:00, 21:00 daily
 BOUNTY_SCHEDULE = "0 */2 * * *"              # every 2 hours
 HEARTBEAT_SCHEDULE = f"*/{settings.HEARTBEAT_INTERVAL_MINUTES} * * * *"
+DEFILLAMA_SYNC_SCHEDULE = settings.DEFILLAMA_SYNC_CRON
+
+
+def _heartbeat_trigger():
+    """Build a heartbeat trigger that works for any minute interval."""
+    minutes = max(1, int(settings.HEARTBEAT_INTERVAL_MINUTES))
+    return IntervalTrigger(minutes=minutes)
 
 
 def create_scheduler() -> BackgroundScheduler:
@@ -21,13 +27,14 @@ def create_scheduler() -> BackgroundScheduler:
     return scheduler
 
 
-def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn):
+def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, defillama_sync_fn):
     """Register all scheduled jobs on the given scheduler.
 
     Args:
         scheduler: APScheduler instance
         pipeline_fn: callable(schedule_name) that runs the full fetch→push pipeline
         heartbeat_fn: callable() that sends heartbeat + checks source health
+        defillama_sync_fn: callable() that refreshes DefiLlama candidate chains
     """
     # Grant + Hackathon — twice daily
     scheduler.add_job(
@@ -50,13 +57,23 @@ def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn):
     # Heartbeat + health check
     scheduler.add_job(
         heartbeat_fn,
-        trigger=CronTrigger.from_crontab(HEARTBEAT_SCHEDULE, timezone="Asia/Shanghai"),
+        trigger=_heartbeat_trigger(),
         id="heartbeat",
         name="System Heartbeat & Health Check",
         replace_existing=True,
     )
 
+    if settings.DEFILLAMA_SYNC_ENABLED:
+        scheduler.add_job(
+            defillama_sync_fn,
+            trigger=CronTrigger.from_crontab(DEFILLAMA_SYNC_SCHEDULE, timezone="Asia/Shanghai"),
+            id="defillama_candidate_sync",
+            name="DefiLlama Candidate Sync",
+            replace_existing=True,
+        )
+
     logger.info(
         f"Registered jobs: grant_hackathon({GRANT_HACKATHON_SCHEDULE}), "
-        f"bounty({BOUNTY_SCHEDULE}), heartbeat({HEARTBEAT_SCHEDULE})"
+        f"bounty({BOUNTY_SCHEDULE}), heartbeat({HEARTBEAT_SCHEDULE}), "
+        f"defillama_sync({'disabled' if not settings.DEFILLAMA_SYNC_ENABLED else DEFILLAMA_SYNC_SCHEDULE})"
     )

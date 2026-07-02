@@ -135,6 +135,10 @@ def upsert_source_health(db: Session, source_name: str, success: bool = True,
     db.commit()
 
 
+def get_source_health(db: Session, source_name: str) -> Optional[SourceHealth]:
+    return db.query(SourceHealth).filter(SourceHealth.source_name == source_name).first()
+
+
 def get_unhealthy_sources(db: Session) -> List[SourceHealth]:
     return db.query(SourceHealth).filter(SourceHealth.status != "healthy").all()
 

@@ -35,15 +35,6 @@ def heartbeat(slack_send_fn) -> dict:
             "unhealthy_names": [s.source_name for s in unhealthy],
         }
 
-        # Send to Slack
-        slack_send_fn(stats)
-
-        # Alert on down sources
-        for src in unhealthy:
-            if src.status == "down":
-                slack_send_fn(f"⚠️ Source **{src.source_name}** is DOWN "
-                             f"({src.consecutive_failures} consecutive failures): {src.last_error}")
-
         return stats
     finally:
         db.close()

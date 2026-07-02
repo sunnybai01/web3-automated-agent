@@ -1,0 +1,133 @@
+chains:
+  - chain_id: ethereum
+    name: Ethereum
+    defillama_name: Ethereum
+    defillama_chain_id: 1
+    defillama_slug: ethereum
+    seed_tvl: 0
+    category: l1
+    priority: 1
+    review_status: approved
+    review_notes: bootstrap seed for official source migration
+    enabled: true
+  - chain_id: solana
+    name: Solana
+    defillama_name: Solana
+    defillama_chain_id: null
+    defillama_slug: solana
+    seed_tvl: 0
+    category: l1
+    priority: 2
+    review_status: approved
+    review_notes: bootstrap seed for official source migration
+    enabled: true
+  - chain_id: sui
+    name: Sui
+    defillama_name: Sui
+    defillama_chain_id: null
+    defillama_slug: sui
+    seed_tvl: 0
+    category: l1
+    priority: 3
+    review_status: approved
+    review_notes: bootstrap seed for official source migration
+    enabled: true
+  - chain_id: stellar
+    name: Stellar
+    defillama_name: Stellar
+    defillama_chain_id: null
+    defillama_slug: stellar
+    seed_tvl: 0
+    category: l1
+    priority: 4
+    review_status: approved
+    review_notes: approved to expand dynamic discovery coverage
+    enabled: true
+  - chain_id: aptos
+    name: Aptos
+    defillama_name: Aptos
+    defillama_chain_id: null
+    defillama_slug: aptos
+    seed_tvl: 0
+    category: l1
+    priority: 5
+    review_status: approved
+    review_notes: approved to expand dynamic discovery coverage
+    enabled: true
+  - chain_id: starknet
+    name: Starknet
+    defillama_name: Starknet
+    defillama_chain_id: null
+    defillama_slug: starknet
+    seed_tvl: 0
+    category: l2
+    priority: 6
+    review_status: approved
+    review_notes: approved to expand dynamic discovery coverage
+    enabled: true
+  - chain_id: near
+    name: Near
+    defillama_name: Near
+    defillama_chain_id: null
+    defillama_slug: near
+    seed_tvl: 0
+    category: l1
+    priority: 7
+    review_status: approved
+    review_notes: approved to expand dynamic discovery coverage
+    enabled: true
+  - chain_id: arbitrum
+    name: Arbitrum
+    defillama_name: Arbitrum
+    defillama_chain_id: 42161
+    defillama_slug: arbitrum
+    seed_tvl: 0
+    category: l2
+    priority: 8
+    review_status: approved
+    review_notes: approved to expand dynamic discovery coverage
+    enabled: true
+  - chain_id: base
+    name: Base
+    defillama_name: Base
+    defillama_chain_id: 8453
+    defillama_slug: null
+    seed_tvl: 0
+    category: l2
+    priority: 9
+    review_status: approved
+    review_notes: approved to expand dynamic discovery coverage
+    enabled: true
+  - chain_id: polygon
+    name: Polygon
+    defillama_name: Polygon
+    defillama_chain_id: 137
+    defillama_slug: polygon-ecosystem-token
+    seed_tvl: 0
+    category: l2
+    priority: 10
+    review_status: approved
+    review_notes: approved to expand dynamic discovery coverage
+    enabled: true
+  - chain_id: avalanche
+    name: Avalanche
+    defillama_name: Avalanche
+    defillama_chain_id: 43114
+    defillama_slug: avalanche-2
+    seed_tvl: 0
+    category: l1
+    priority: 11
+    review_status: approved
+    review_notes: approved to expand dynamic discovery coverage
+    enabled: true
+  - chain_id: monad
+    name: Monad
+    defillama_name: Monad
+    defillama_chain_id: 143
+    defillama_slug: monad
+    seed_tvl: 0
+    category: l1
+    priority: 12
+    review_status: approved
+    review_notes: approved to expand dynamic discovery coverage
+    enabled: true

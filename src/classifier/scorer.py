@@ -20,6 +20,9 @@ class OpportunityScorer:
     """Scores verified opportunities across 4 dimensions using LLM + inline heuristics."""
 
     WEIGHTS = settings.SCORE_WEIGHTS  # {"roi": 0.40, "reputation": 0.30, "timeliness": 0.20, "strategy": 0.10}
+    OFFICIAL_REPUTATION_BONUS = 1.0
+    DISCOVERY_REPUTATION_PENALTY = 0.5
+    DEGRADED_STRATEGY_PENALTY = 0.5
 
     def __init__(self, llm_gateway: LLMGateway):
         self.llm = llm_gateway
@@ -42,6 +45,9 @@ class OpportunityScorer:
             ecosystem=event_data.get("ecosystem", ""),
             track=event_data.get("track", ""),
             platform=event_data.get("source_platform", ""),
+            source_tier=event_data.get("source_tier", "unknown"),
+            official=event_data.get("official", False),
+            verification_verdict=event_data.get("verification_verdict", "unknown"),
         )
 
         result = self.llm.classify_structured(SCORE_SYSTEM, prompt)
@@ -60,7 +66,7 @@ class OpportunityScorer:
             event_data["score_timeliness"] = result["score_timeliness"]
             event_data["score_strategy"] = result["score_strategy"]
             event_data["final_score"] = round(final, 2)
-            return event_data
+            return self._apply_trust_adjustments(event_data)
 
         # Fallback: heuristic scoring
         logger.warning("LLM scoring failed, using heuristic fallback")
@@ -146,7 +152,50 @@ class OpportunityScorer:
         event_data["score_timeliness"] = round(score_timeliness, 1)
         event_data["score_strategy"] = round(score_strategy, 1)
         event_data["final_score"] = round(final, 2)
+        return self._apply_trust_adjustments(event_data)
+
+    def _apply_trust_adjustments(self, event_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply small source-trust adjustments after base scoring."""
+        source_tier = str(event_data.get("source_tier") or "").lower()
+        official = bool(event_data.get("official", source_tier == "official"))
+        verification_verdict = str(event_data.get("verification_verdict") or "").lower()
+
+        reputation = float(event_data.get("score_reputation") or 0.0)
+        strategy = float(event_data.get("score_strategy") or 0.0)
+
+        if official or source_tier == "official":
+            reputation += self.OFFICIAL_REPUTATION_BONUS
+        elif source_tier == "discovery":
+            reputation -= self.DISCOVERY_REPUTATION_PENALTY
+
+        if verification_verdict == "degraded":
+            strategy -= self.DEGRADED_STRATEGY_PENALTY
+
+        event_data["score_reputation"] = round(self._clamp_score(reputation), 1)
+        event_data["score_strategy"] = round(self._clamp_score(strategy), 1)
+        event_data["official"] = official
+        event_data["trust_label"] = self._trust_label(source_tier, official, verification_verdict)
+
+        final = (
+            event_data["score_roi"] * self.WEIGHTS["roi"]
+            + event_data["score_reputation"] * self.WEIGHTS["reputation"]
+            + event_data["score_timeliness"] * self.WEIGHTS["timeliness"]
+            + event_data["score_strategy"] * self.WEIGHTS["strategy"]
+        )
+        event_data["final_score"] = round(final, 2)
         return event_data
+
+    @staticmethod
+    def _clamp_score(value: float) -> float:
+        return max(1.0, min(10.0, value))
+
+    @staticmethod
+    def _trust_label(source_tier: str, official: bool, verification_verdict: str) -> str:
+        if (official or source_tier == "official") and verification_verdict == "verified":
+            return "confirmed_official"
+        if source_tier == "discovery" or verification_verdict == "degraded":
+            return "discovery_review"
+        return "verified_review"
 
 
 def stars_from_score(score: float) -> str:

@@ -1,0 +1,114 @@
+@import "tailwindcss";
+@import "@copilotkit/react-ui/styles.css";
+
+:root {
+  --background: 42 38% 96%;
+  --foreground: 26 32% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 26 32% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 26 32% 12%;
+  --primary: 24 94% 54%;
+  --primary-foreground: 30 40% 98%;
+  --secondary: 36 43% 90%;
+  --secondary-foreground: 26 32% 12%;
+  --muted: 36 29% 92%;
+  --muted-foreground: 24 12% 38%;
+  --accent: 34 100% 94%;
+  --accent-foreground: 24 62% 24%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 28 24% 84%;
+  --input: 30 20% 91%;
+  --ring: 24 94% 54%;
+  --radius: 1.25rem;
+}
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --radius-sm: calc(var(--radius) - 0.5rem);
+  --radius-md: calc(var(--radius) - 0.25rem);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 0.5rem);
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: "SF Pro Display", "Inter", "Segoe UI", sans-serif;
+}
+
+.copilotKitChat,
+.copilotKitPopup {
+  --copilot-kit-primary-color: hsl(var(--primary));
+  --copilot-kit-contrast-color: hsl(var(--primary-foreground));
+  --copilot-kit-background-color: hsl(var(--background));
+  --copilot-kit-secondary-color: hsl(var(--card));
+  --copilot-kit-separator-color: hsl(var(--border));
+}
+
+.copilotKitChat {
+  width: 100%;
+}
+
+.copilotKitMessagesContainer,
+.copilotKitMessages,
+.copilotKitMessage,
+.copilotKitMarkdown,
+.copilotKitMarkdownElement {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.copilotKitMarkdown svg,
+.copilotKitMarkdownElement svg,
+.copilotKitMessage svg {
+  max-width: 1em;
+  max-height: 1em;
+  width: 1em;
+  height: 1em;
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: text-bottom;
+}
+
+.copilotKitMarkdown img,
+.copilotKitMarkdownElement img {
+  max-width: 100%;
+  height: auto;
+}
+
+.copilotKitMarkdown blockquote,
+.copilotKitMarkdownElement blockquote {
+  margin: 0.75rem 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid hsl(var(--border));
+}

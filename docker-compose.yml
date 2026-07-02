@@ -1,11 +1,20 @@
 services:
+  chat-api:
+    build: .
+    container_name: web3_agent_chat_api
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    command: uvicorn src.chat_api.app:app --host 0.0.0.0 --port 8000
+    ports:
+      - "127.0.0.1:8000:8000"
+
   agent-app:
     build: .
     container_name: web3_agent_main
-    volumes:
-      - .:/app
-    ports:
-      - "8501:8501"
     env_file:
       - .env
     environment:
@@ -22,7 +31,7 @@ services:
     image: pgvector/pgvector:pg16
     container_name: web3_agent_postgres
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-web3agent}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-web3agent}
@@ -39,7 +48,7 @@ services:
     image: chromadb/chroma:latest
     container_name: web3_agent_chromadb
     ports:
-      - "8001:8000"
+      - "127.0.0.1:8001:8000"
     volumes:
       - chroma_data:/chroma/chroma
     environment:

@@ -68,7 +68,7 @@ cp .env.example .env
 - 向量库：`CHROMA_HOST` `CHROMA_PORT`
 - LLM：`DEEPSEEK_API_KEY` / `QWEN_API_KEY` / `GEMINI_API_KEY`
 - Slack：`SLACK_BOT_TOKEN` `SLACK_CHANNEL_ID`
-- 搜索：`GITHUB_TOKEN` `TAVILY_API_KEY`
+- 搜索：`GITHUB_TOKEN` `TAVILY_API_KEY` `DEFILLAMA_CHAINS_URL`
 - 运行：`LOG_LEVEL` `HEARTBEAT_INTERVAL_MINUTES`
 
 注意：修改 `.env` 后，若容器已在运行，需要重建应用容器使新环境生效。
@@ -211,6 +211,47 @@ docker compose exec -T postgres psql -U web3agent -d web3agent -c "SELECT source
 - 给 Bot 增加 `files:write`
 - 重新安装 App 到 Workspace
 
+## 15. DefiLlama Seed Sync
+
+Generate a reviewed candidate chain snapshot from DefiLlama:
+
+```bash
+python scripts/sync_defillama_chains.py --top-n 50
+```
+
+This overwrites `config/chains.candidates.yaml` with the latest reviewed candidate snapshot.
+
+Default endpoint:
+
+```bash
+DEFILLAMA_CHAINS_URL=https://api.llama.fi/v2/chains
+```
+
+Scheduled refresh is also enabled in the main agent runtime by default:
+
+```bash
+DEFILLAMA_SYNC_ENABLED=true
+DEFILLAMA_SYNC_CRON="30 6 * * *"
+DEFILLAMA_SYNC_TOP_N=50
+```
+
+The cron is interpreted in the app scheduler timezone (`Asia/Shanghai`).
+
+This command updates `config/chains.candidates.yaml` only. It does not auto-enable chains in `config/chains.yaml`.
+
+Current importer behavior also filters a small set of obvious non-target chains before review so the candidate file is less noisy. Approved chains in `config/chains.yaml` still pass through unchanged.
+
+## 16. Chain-Aware Source Metadata
+
+`config/sources.yaml` now supports these fields on each source entry:
+
+- `chain`: canonical ecosystem id
+- `source_tier`: `official` or `discovery`
+- `signal_type`: `grant`, `hackathon`, `bounty`, `social`, or `discovery`
+- `official`: trust hint for downstream verification
+
+Existing entries do not need to be rewritten immediately. The loader in `src/fetchers/builder.py` backfills these fields automatically from `ecosystem`, `category`, and `fetch_method` so migration can happen incrementally.
+
 ## 14. 新成员交接建议
 
 建议按以下顺序熟悉项目：
@@ -222,5 +263,30 @@ docker compose exec -T postgres psql -U web3agent -d web3agent -c "SELECT source
 5. 在 Slack 验证卡片与报告上传行为
 
 ---
+
+## 15. Agent Chat V1 (Read-Only)
+
+后端 API：
+
+- 启动：`uvicorn src.chat_api.app:app --host 0.0.0.0 --port 9000`
+- 健康检查：`GET /api/v1/chat/health`
+- 目标选择：`POST /api/v1/chat/select-targets`
+- 可靠性验证：`POST /api/v1/chat/verify`
+- 方案建议：`POST /api/v1/chat/propose-options`
+
+前端：
+
+- `cd apps/chat-web && pnpm install && pnpm dev`
+
+必需环境变量：
+
+- `CHAT_API_BASE_URL`
+- `CHAT_API_INTERNAL_KEY`
+
+部署说明：
+
+- Chat API 运行时应使用只读数据库凭据。
+- 采集/入库 Pipeline 与 Chat API 使用独立凭据。
+- 前端可部署到 Vercel，需同步配置 `CHAT_API_BASE_URL` 与 `CHAT_API_INTERNAL_KEY`。
 
 如需扩展新数据源，优先在 `src/fetchers/` 增加 fetcher 并在 `src/fetchers/builder.py` 注册，再在 `config/sources.yaml` 增加 source 配置。

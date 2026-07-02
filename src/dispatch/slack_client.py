@@ -71,6 +71,10 @@ class SlackDispatcher:
         ecosystem = event.get("ecosystem", "Unknown").upper()
         track = event.get("track", "General")
         score = event.get("final_score", 0)
+        source_tier = str(event.get("source_tier") or "").lower()
+        official = bool(event.get("official", source_tier == "official"))
+        source_trust = "Official" if official else "Discovery"
+        verification = str(event.get("verification_verdict") or "unknown").title()
         app_url = event.get("application_url", "")
         source_url = event.get("source_url", app_url)
         header_url = source_url or app_url or "https://slack.com"
@@ -83,6 +87,8 @@ class SlackDispatcher:
             f"*Deadline:* {deadline}",
             f"*Ecosystem:* {ecosystem}",
             f"*Track:* {track}",
+            f"*Source trust:* {source_trust}",
+            f"*Verification:* {verification}",
             f"*Heat:* {event.get('heat_count', 1)} source(s)",
         ])
 

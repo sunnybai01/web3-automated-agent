@@ -1,0 +1,29 @@
+# VCS and editor
+.git
+.gitignore
+.vscode
+.DS_Store
+
+# Python caches and virtualenvs
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.venv
+venv
+
+# Node build artifacts
+**/node_modules
+**/.next
+**/dist
+**/coverage
+
+# Logs and runtime artifacts
+*.log
+reports/
+
+# Local env files
+.env
+apps/chat-web/.env

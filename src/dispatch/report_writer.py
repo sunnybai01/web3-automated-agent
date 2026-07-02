@@ -18,6 +18,54 @@ REPORTS_DIR = Path(__file__).resolve().parent.parent.parent / "reports"
 EMOJI_MAP = {"grant": "💰", "hackathon": "🏆", "bounty": "🔍", "other": "📋"}
 
 
+def _is_official_signal(event: Dict[str, Any]) -> bool:
+    source_tier = str(event.get("source_tier") or "").lower()
+    return bool(event.get("official", source_tier == "official"))
+
+
+def _render_event(lines: List[str], event: Dict[str, Any], index: int) -> None:
+    event_type = (event.get("event_type") or "other").lower()
+    emoji = EMOJI_MAP.get(event_type, "📋")
+    title = event.get("title", "Untitled")
+    score = event.get("final_score")
+    stars = stars_from_score(score) if score else ""
+    amount = event.get("amount") or "Not specified"
+    deadline = event.get("deadline") or "Rolling"
+    if hasattr(deadline, "strftime"):
+        deadline = deadline.strftime("%Y-%m-%d")
+    ecosystem = (event.get("ecosystem") or "Unknown").upper()
+    track = event.get("track") or "General"
+    heat = event.get("heat_count", 1)
+    desc = event.get("description") or ""
+    app_url = event.get("application_url") or ""
+    source_url = event.get("source_url") or ""
+    source_trust = "Official" if _is_official_signal(event) else "Discovery"
+    verification = str(event.get("verification_verdict") or "unknown").title()
+
+    lines.append(f"### {index}. {emoji} [{event_type.upper()}] {title}")
+    lines.append("")
+    lines.append(f"| Field | Detail |")
+    lines.append(f"|---|---|")
+    lines.append(f"| **Score** | {stars} `{score}/10` |" if score else "| **Score** | — |")
+    lines.append(f"| **Source trust** | {source_trust} |")
+    lines.append(f"| **Verification** | {verification} |")
+    lines.append(f"| **Amount** | {amount} |")
+    lines.append(f"| **Deadline** | {deadline} |")
+    lines.append(f"| **Ecosystem** | {ecosystem} |")
+    lines.append(f"| **Track** | {track} |")
+    lines.append(f"| **Heat** | {heat} source(s) |")
+    if app_url:
+        lines.append(f"| **Apply** | [{app_url}]({app_url}) |")
+    if source_url and source_url != app_url:
+        lines.append(f"| **Source** | [{source_url}]({source_url}) |")
+    lines.append("")
+    if desc:
+        lines.append(f"{desc}")
+        lines.append("")
+    lines.append("---")
+    lines.append("")
+
+
 def generate_report(
     events: List[Dict[str, Any]],
     schedule: str,
@@ -63,44 +111,23 @@ def generate_report(
     else:
         lines.append(f"## 🎯 Opportunities Found ({len(events)})")
         lines.append("")
+        confirmed = [event for event in events if _is_official_signal(event)]
+        discovery = [event for event in events if not _is_official_signal(event)]
 
-        for i, event in enumerate(events, 1):
-            event_type = (event.get("event_type") or "other").lower()
-            emoji = EMOJI_MAP.get(event_type, "📋")
-            title = event.get("title", "Untitled")
-            score = event.get("final_score")
-            stars = stars_from_score(score) if score else ""
-            amount = event.get("amount") or "Not specified"
-            deadline = event.get("deadline") or "Rolling"
-            if hasattr(deadline, "strftime"):
-                deadline = deadline.strftime("%Y-%m-%d")
-            ecosystem = (event.get("ecosystem") or "Unknown").upper()
-            track = event.get("track") or "General"
-            heat = event.get("heat_count", 1)
-            desc = event.get("description") or ""
-            app_url = event.get("application_url") or ""
-            source_url = event.get("source_url") or ""
+        index = 1
+        if confirmed:
+            lines.append("### Confirmed / Official Signals")
+            lines.append("")
+            for event in confirmed:
+                _render_event(lines, event, index)
+                index += 1
 
-            lines.append(f"### {i}. {emoji} [{event_type.upper()}] {title}")
+        if discovery:
+            lines.append("### Discovery / Review Needed")
             lines.append("")
-            lines.append(f"| Field | Detail |")
-            lines.append(f"|---|---|")
-            lines.append(f"| **Score** | {stars} `{score}/10` |" if score else "| **Score** | — |")
-            lines.append(f"| **Amount** | {amount} |")
-            lines.append(f"| **Deadline** | {deadline} |")
-            lines.append(f"| **Ecosystem** | {ecosystem} |")
-            lines.append(f"| **Track** | {track} |")
-            lines.append(f"| **Heat** | {heat} source(s) |")
-            if app_url:
-                lines.append(f"| **Apply** | [{app_url}]({app_url}) |")
-            if source_url and source_url != app_url:
-                lines.append(f"| **Source** | [{source_url}]({source_url}) |")
-            lines.append("")
-            if desc:
-                lines.append(f"{desc}")
-                lines.append("")
-            lines.append("---")
-            lines.append("")
+            for event in discovery:
+                _render_event(lines, event, index)
+                index += 1
 
     lines.append(f"*Report generated by Web3 Intelligence Agent V1*")
     lines.append("")

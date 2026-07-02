@@ -1,0 +1,119 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  getManualScanProgressLabel,
+  getScheduleStatusMap,
+  summarizeManualScan,
+} from "./manual-scan";
+
+describe("manual scan helpers", () => {
+  it("summarizes schedule totals", () => {
+    const summary = summarizeManualScan({
+      job_id: "job-1",
+      status: "success",
+      triggered: true,
+      started_at: "2026-07-02T09:00:00Z",
+      finished_at: "2026-07-02T09:01:00Z",
+      current_stage: "",
+      error: "",
+      schedules: [
+        {
+          schedule: "grant_hackathon",
+          status: "success",
+          fetched: 12,
+          new: 2,
+          deduped: 10,
+          classified: 2,
+          verified: 1,
+          fraud: 0,
+          pushed: 1,
+        },
+        {
+          schedule: "bounty",
+          status: "success",
+          fetched: 6,
+          new: 3,
+          deduped: 3,
+          classified: 3,
+          verified: 2,
+          fraud: 1,
+          pushed: 2,
+        },
+      ],
+    });
+
+    expect(summary).toEqual({
+      fetched: 18,
+      new: 5,
+      deduped: 13,
+      classified: 5,
+      verified: 3,
+      fraud: 1,
+      pushed: 3,
+    });
+  });
+
+  it("maps schedule progress for running job", () => {
+    const schedules = getScheduleStatusMap({
+      job_id: "job-2",
+      status: "running",
+      triggered: true,
+      started_at: "2026-07-02T09:00:00Z",
+      finished_at: "",
+      current_stage: "bounty",
+      error: "",
+      schedules: [
+        {
+          schedule: "grant_hackathon",
+          status: "success",
+          fetched: 10,
+          new: 0,
+          deduped: 10,
+          classified: 0,
+          verified: 0,
+          fraud: 0,
+          pushed: 0,
+        },
+      ],
+    });
+
+    expect(schedules).toEqual([
+      {
+        schedule: "grant_hackathon",
+        status: "success",
+        result: {
+          schedule: "grant_hackathon",
+          status: "success",
+          fetched: 10,
+          new: 0,
+          deduped: 10,
+          classified: 0,
+          verified: 0,
+          fraud: 0,
+          pushed: 0,
+        },
+      },
+      {
+        schedule: "bounty",
+        status: "running",
+        result: null,
+      },
+    ]);
+  });
+
+  it("returns readable progress labels", () => {
+    expect(getManualScanProgressLabel(null)).toBe("No manual scan yet");
+    expect(
+      getManualScanProgressLabel({
+        job_id: "job-3",
+        status: "running",
+        triggered: true,
+        started_at: "2026-07-02T09:00:00Z",
+        finished_at: "",
+        current_stage: "grant_hackathon",
+        error: "",
+        schedules: [],
+      })
+    ).toBe("Running grant_hackathon");
+  });
+});

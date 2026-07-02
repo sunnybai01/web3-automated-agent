@@ -17,6 +17,18 @@ from .security_api import security_api_check
 logger = logging.getLogger(__name__)
 
 
+def _build_source_context(metadata: dict | None) -> Dict[str, Any]:
+    metadata = metadata or {}
+    source_tier = metadata.get("source_tier")
+    official = bool(metadata.get("official", source_tier == "official"))
+    return {
+        "chain": metadata.get("chain"),
+        "source_tier": source_tier,
+        "official": official,
+        "signal_type": metadata.get("signal_type"),
+    }
+
+
 class Verifier:
     """Runs the three-layer zero-trust verification pipeline.
 
@@ -46,6 +58,8 @@ class Verifier:
             "layers": {},
             "verdict": "degraded",
         }
+        source_context = _build_source_context(metadata)
+        verification_log["source_context"] = source_context
 
         # ---- Layer 1: Origin Identity Anchoring ----
         l1 = origin_check(source_url, source_name)
@@ -54,10 +68,20 @@ class Verifier:
         if not l1["passed"]:
             # Layer 1 failure = immediate fraud classification
             # UNLESS the source is a well-known platform (e.g., RSS feed itself is trusted)
+            is_registry_official = source_context.get("official") or source_context.get("source_tier") == "official"
             if "immunefi.com" in source_url or "gitcoin.co" in source_url:
                 # Known platforms get a pass on L1 when the URL comes from their own domain
                 verification_log["layers"]["origin_anchor"]["overridden"] = True
                 verification_log["layers"]["origin_anchor"]["passed"] = True
+                verification_log["layers"]["origin_anchor"]["reason"] = (
+                    f"{l1.get('reason', 'origin failed')}; overridden by trusted platform allowlist"
+                )
+            elif is_registry_official:
+                verification_log["layers"]["origin_anchor"]["overridden"] = True
+                verification_log["layers"]["origin_anchor"]["passed"] = True
+                verification_log["layers"]["origin_anchor"]["reason"] = (
+                    f"{l1.get('reason', 'origin failed')}; overridden by approved official source registry"
+                )
             else:
                 verification_log["verdict"] = "fraud"
                 return {

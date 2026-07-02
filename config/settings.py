@@ -46,6 +46,10 @@ class Settings:
     # Search / discovery
     GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")
     TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
+    DEFILLAMA_CHAINS_URL: str = os.getenv("DEFILLAMA_CHAINS_URL", "https://api.llama.fi/v2/chains")
+    DEFILLAMA_SYNC_ENABLED: bool = os.getenv("DEFILLAMA_SYNC_ENABLED", "true").lower() == "true"
+    DEFILLAMA_SYNC_CRON: str = os.getenv("DEFILLAMA_SYNC_CRON", "30 6 * * *")
+    DEFILLAMA_SYNC_TOP_N: int = int(os.getenv("DEFILLAMA_SYNC_TOP_N", "50"))
 
     # App
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
