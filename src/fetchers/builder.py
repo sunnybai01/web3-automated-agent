@@ -3,6 +3,7 @@ import logging
 import yaml
 from pathlib import Path
 
+from config.settings import settings
 from .base import FetcherRegistry
 
 logger = logging.getLogger(__name__)
@@ -15,6 +16,7 @@ FETCHER_MAP = {
     "rss": ".rss_fetcher:RSSFetcher",
     "github_search": ".github_fetcher:GitHubFetcher",
     "rsshub": ".twitter_fetcher:TwitterFetcher",
+    "twitter": ".twitter_fetcher:TwitterFetcher",
     "web_scraper": ".web_scraper:WebScraperFetcher",
     "tavily_search": ".tavily_fetcher:TavilyFetcher",
 }
@@ -48,11 +50,35 @@ def _normalize_source_metadata(source: dict) -> dict:
         normalized.get("official", source_tier == "official")
     )
 
+    is_social_source = fetch_method in {"twitter", "rsshub"} or normalized.get("category") == "social"
+
     if "signal_type" not in normalized:
-        if source_tier == "discovery":
+        if is_social_source:
+            normalized["signal_type"] = "social"
+        elif source_tier == "discovery":
             normalized["signal_type"] = "discovery"
         else:
             normalized["signal_type"] = normalized.get("category", "discovery")
+
+    if is_social_source:
+        normalized["trust_tier"] = normalized.get("trust_tier") or (
+            "discovery" if source_tier == "discovery" else "official"
+        )
+        normalized["ingestion_mode"] = normalized.get("ingestion_mode") or (
+            "preprocessed" if normalized["trust_tier"] == "discovery" else "direct"
+        )
+        normalized["source_kind"] = normalized.get("source_kind") or "account"
+        normalized["watch_priority"] = normalized.get("watch_priority") or "normal"
+
+    if fetch_method == "tavily_search":
+        normalized["success_cooldown_minutes"] = int(
+            normalized.get("success_cooldown_minutes")
+            or settings.TAVILY_SUCCESS_COOLDOWN_MINUTES
+        )
+        normalized["max_sources_per_run"] = int(
+            normalized.get("max_sources_per_run")
+            or settings.TAVILY_MAX_SOURCES_PER_RUN
+        )
 
     return normalized
 

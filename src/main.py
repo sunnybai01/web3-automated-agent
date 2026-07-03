@@ -5,12 +5,12 @@ Wires together the full V1 pipeline:
 """
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from config.settings import settings
 from src.db.database import init_db, SessionLocal
 from src.fetchers.builder import load_sources_config, build_registry
-from src.fetchers.base import get_fetch_skip_reason
+from src.fetchers.base import get_fetch_skip_reason, select_budgeted_sources
 from src.dedup.url_dedup import process_item_l1
 from src.dedup.content_dedup import ContentDeduplicator
 from src.dedup.vector_store import VectorStore
@@ -50,6 +50,20 @@ _classifier = None
 _scorer = None
 _slack = None
 _stats_reset_day = datetime.now(timezone.utc).day
+STALE_EVENT_MAX_AGE = timedelta(days=7)
+
+EVENT_MODEL_FIELDS = {
+    "event_type",
+    "title",
+    "description",
+    "deadline",
+    "amount",
+    "track",
+    "ecosystem",
+    "application_url",
+    "source_url",
+    "source_platform",
+}
 
 
 def _init_components():
@@ -71,6 +85,51 @@ def _init_components():
 
     if _slack is None:
         _slack = SlackDispatcher()
+
+
+def _persistable_event_data(event_data: dict) -> dict:
+    return {
+        key: value
+        for key, value in event_data.items()
+        if key in EVENT_MODEL_FIELDS
+    }
+
+
+def _parse_datetime(value):
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+    return None
+
+
+def _published_at(item) -> datetime | None:
+    metadata = item.metadata or {}
+    for key in ("created_at", "published_at", "published_date", "published"):
+        published_at = _parse_datetime(metadata.get(key))
+        if published_at is not None:
+            return published_at
+    return None
+
+
+def _staleness_reason(item, structured: dict | None, now: datetime | None = None) -> str | None:
+    now = now or datetime.now(timezone.utc)
+
+    published_at = _published_at(item)
+    if published_at is not None and now - published_at > STALE_EVENT_MAX_AGE:
+        return "published_too_old"
+
+    deadline = _parse_datetime((structured or {}).get("deadline"))
+    if deadline is not None and deadline < now:
+        return "deadline_expired"
+
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -95,9 +154,26 @@ def run_pipeline(schedule: str):
     result = None
 
     try:
+        fetcher_sources = [
+            {**fetcher.config, "name": name}
+            for name, fetcher in _fetcher_registry._fetchers.items()
+        ]
+        health_by_source = {
+            source["name"]: get_source_health(db, source["name"])
+            for source in fetcher_sources
+        }
+        tavily_allowed = select_budgeted_sources(
+            fetcher_sources,
+            health_by_source,
+            schedule,
+            fetch_method="tavily_search",
+        )
+
         # --- Phase 1: Fetch ---
         def _should_skip_fetch(name, fetcher):
-            health = get_source_health(db, name)
+            if fetcher.config.get("fetch_method") == "tavily_search" and name not in tavily_allowed:
+                return "method_budget"
+            health = health_by_source.get(name)
             return get_fetch_skip_reason(fetcher.config, health)
 
         items, source_status = _fetcher_registry.fetch_all_with_status(
@@ -138,6 +214,11 @@ def run_pipeline(schedule: str):
                 continue
             stats["classified"] += 1
 
+            staleness_reason = _staleness_reason(item, structured)
+            if staleness_reason:
+                logger.info("[%s] Skip stale item from %s: %s", schedule, item.source_name, staleness_reason)
+                continue
+
             source_metadata = {
                 "chain": item.metadata.get("chain"),
                 "source_tier": item.metadata.get("source_tier"),
@@ -161,7 +242,7 @@ def run_pipeline(schedule: str):
             }
 
             event_id, is_new = _deduplicator.check_and_process(
-                db, event_data,
+                db, _persistable_event_data(event_data),
                 source_type=item.source_type,
                 source_name=item.source_name,
                 source_url=item.raw_url,
@@ -250,7 +331,7 @@ def run_pipeline(schedule: str):
 
     except Exception as e:
         logger.exception(f"[{schedule}] Pipeline failed: {e}")
-        finish_schedule_log(db, log.id, status="failed", error=str(e))
+        finish_schedule_log(db, log.id, error=str(e))
         # Update source health for failed sources
         for name in _fetcher_registry._fetchers:
             upsert_source_health(db, name, success=False, error=str(e))
@@ -284,6 +365,11 @@ def run_defillama_candidate_sync():
     )
 
 
+def run_social_watch():
+    """Run the dedicated social watch schedule."""
+    return run_pipeline("social_watch")
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -296,7 +382,7 @@ def main():
 
     # Create scheduler
     scheduler = create_scheduler()
-    register_jobs(scheduler, run_pipeline, run_heartbeat, run_defillama_candidate_sync)
+    register_jobs(scheduler, run_pipeline, run_heartbeat, run_defillama_candidate_sync, run_social_watch)
     scheduler.start()
     logger.info("Scheduler started — waiting for jobs...")
 
@@ -316,6 +402,7 @@ def main():
         logger.info("Running initial pipeline pass...")
         run_pipeline("grant_hackathon")
         run_pipeline("bounty")
+        run_social_watch()
         run_heartbeat()
 
         stop_event.wait()

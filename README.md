@@ -2,7 +2,7 @@
 
 一个面向 Grants / Hackathons / Bounties 的自动化情报代理：
 
-- 定时抓取多源信息（RSS、GitHub Search、网页抓取、Tavily）
+- 定时抓取多源信息（RSS、GitHub Search、网页抓取、Tavily、Twitter Social Watch）
 - 双层去重（URL + 语义）
 - 分类、验证、评分
 - 推送到 Slack
@@ -12,7 +12,7 @@
 
 ## 1. 功能概览
 
-- 多源抓取：RSS、GitHub Issues Search、RSSHub、Web Scraper、Tavily Search
+- 多源抓取：RSS、GitHub Issues Search、Twitter（Twikit）、Web Scraper、Tavily Search
 - 流程管道：Fetch -> Dedup(L1/L2) -> Classify -> Verify -> Score -> Dispatch
 - 存储层：PostgreSQL（业务数据）+ ChromaDB（语义向量）
 - 消息分发：Slack Block Kit 卡片 + 运行报告文件上传（需 Slack 权限）
@@ -69,7 +69,14 @@ cp .env.example .env
 - LLM：`DEEPSEEK_API_KEY` / `QWEN_API_KEY` / `GEMINI_API_KEY`
 - Slack：`SLACK_BOT_TOKEN` `SLACK_CHANNEL_ID`
 - 搜索：`GITHUB_TOKEN` `TAVILY_API_KEY` `DEFILLAMA_CHAINS_URL`
-- 运行：`LOG_LEVEL` `HEARTBEAT_INTERVAL_MINUTES`
+- Tavily 调度控制：`TAVILY_SUCCESS_COOLDOWN_MINUTES` `TAVILY_MAX_SOURCES_PER_RUN`
+- Twitter：`TWITTER_AUTH_INFO_1` `TWITTER_AUTH_INFO_2` `TWITTER_PASSWORD` `TWITTER_TOTP_SECRET` `TWITTER_COOKIES_FILE`
+- 运行：`LOG_LEVEL` `HEARTBEAT_INTERVAL_MINUTES` `SOCIAL_WATCH_INTERVAL_MINUTES` `TWITTER_FETCH_COUNT`
+
+当前 Tavily 默认值：
+
+- `TAVILY_SUCCESS_COOLDOWN_MINUTES=5760`：同一个 Tavily source 成功执行后，4 天内不重复搜索
+- `TAVILY_MAX_SOURCES_PER_RUN=1`：每个 schedule 每轮最多只执行 1 个 Tavily source，按“最久未抓取优先”轮转
 
 注意：修改 `.env` 后，若容器已在运行，需要重建应用容器使新环境生效。
 
@@ -109,13 +116,27 @@ docker compose up -d --force-recreate agent-app
 
 - `grant_hackathon`：每天 09:00、21:00
 - `bounty`：每 2 小时
+- `social_watch`：每 `SOCIAL_WATCH_INTERVAL_MINUTES` 分钟
 - `heartbeat`：每 `HEARTBEAT_INTERVAL_MINUTES` 分钟
 
 启动时会先立即跑一次：
 
 - grant_hackathon
 - bounty
+- social_watch
 - heartbeat
+
+Twitter 说明：
+
+- Twitter/X 监听已从 RSSHub 切换为 Twikit。
+- 仓库内置的 Twitter sources 默认保持禁用，避免在未配置 X 登录态时让启动自检失败。
+- `official` Twitter sources 会直入主 pipeline；`discovery` Twitter sources 会先经过预处理降噪。
+
+时效性清洗说明：
+
+- 发布时间超过 7 天的候选会在分类后、入库前被跳过
+- 已经过了 `deadline` 的候选会被跳过
+- Twitter 抓取会透传 tweet `created_at`，用于这层时效过滤
 
 ## 8. Slack 与报告行为
 
@@ -182,6 +203,7 @@ docker compose exec -T agent-app python scripts/inspect_vector_db.py
 - 某个 source 请求异常（如 404/429/422）会标记为 `degraded`，连续失败达到阈值后会进入 `down`。
 - 仅该 source 本轮成功时才会回到 `healthy`。
 - 不再出现“某 source 明明失败但被统一标记 healthy”的情况。
+- Tavily source 额外支持成功冷却：近期成功抓取过的 source 会返回 `success_cooldown` 并被跳过。
 
 常用查询：
 
@@ -210,6 +232,12 @@ docker compose exec -T postgres psql -U web3agent -d web3agent -c "SELECT source
 
 - 给 Bot 增加 `files:write`
 - 重新安装 App 到 Workspace
+
+5. Tavily 消耗过快
+
+- 检查 `TAVILY_SUCCESS_COOLDOWN_MINUTES` 与 `TAVILY_MAX_SOURCES_PER_RUN`
+- 现在 Tavily 不是对每条候选都调用，而是对每个启用的 `tavily_search` source 在预算内执行
+- 若仍需进一步降频，优先调小 `TAVILY_MAX_SOURCES_PER_RUN` 或拉长 `TAVILY_SUCCESS_COOLDOWN_MINUTES`
 
 ## 15. DefiLlama Seed Sync
 
@@ -251,6 +279,10 @@ Current importer behavior also filters a small set of obvious non-target chains 
 - `official`: trust hint for downstream verification
 
 Existing entries do not need to be rewritten immediately. The loader in `src/fetchers/builder.py` backfills these fields automatically from `ecosystem`, `category`, and `fetch_method` so migration can happen incrementally.
+
+近期新增示例 source：
+
+- `stellar_scf_rfp_track`：使用 `web_scraper` 抓取 Stellar SCF RFP Track GitBook 页面，归类为 `grant_hackathon` / `stellar` / `official`
 
 ## 14. 新成员交接建议
 

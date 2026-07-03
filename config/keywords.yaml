@@ -6,9 +6,11 @@ keywords:
   grant:
     - grant
     - grants
+    - grant program
     - funding
     - funded
     - RFP
+    - RFPs
     - request for proposal
     - request for proposals
     - call for proposals
@@ -46,6 +48,9 @@ keywords:
     - game jam
     - hack week
     - build week
+    - builder
+    - builders
+    - cohorts
     - hacker house
     - builder house
     - demo day
@@ -58,6 +63,7 @@ keywords:
     - ETHSF
     - Superhack
     - Scaling Ethereum
+    - devcon
     - 黑客松
     - 黑客马拉松
     - 编程马拉松
@@ -65,8 +71,10 @@ keywords:
   # Bounty-related
   bounty:
     - bounty
+    - bounties
     - bug bounty
     - bug bounties
+    - bounty pool
     - vulnerability bounty
     - security bounty
     - reward
@@ -74,6 +82,7 @@ keywords:
     - bug fix reward
     - whitehat
     - responsible disclosure
+    - task
     - paid task
     - contribution reward
     - contributor reward
@@ -92,7 +101,10 @@ keywords:
   # General signal words (increase recall)
   general:
     - apply now
+    - join now
     - applications open
+    - open for applications
+    - submit your project
     - submission deadline
     - deadline
     - prize pool
@@ -138,4 +150,4 @@ keywords:
 flags:
   case_sensitive: false
   match_partial: true
-  min_keyword_hits: 2  # at least 2 keyword matches to pass coarse filter
+  min_keyword_hits: 2 # at least 2 keyword matches to pass coarse filter

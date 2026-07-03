@@ -62,3 +62,62 @@ def test_load_sources_config_preserves_explicit_chain_aware_metadata(tmp_path: P
     assert source["source_tier"] == "discovery"
     assert source["signal_type"] == "hackathon"
     assert source["official"] is False
+
+
+def test_load_sources_config_backfills_social_metadata_for_twitter_sources(tmp_path: Path) -> None:
+    path = tmp_path / "sources.yaml"
+    path.write_text(
+        "sources:\n"
+        "  - name: twitter_base\n"
+        "    fetch_method: twitter\n"
+        "    category: social\n"
+        "    ecosystem: base\n"
+        "    schedule: social_watch\n"
+        "    enabled: true\n",
+        encoding="utf-8",
+    )
+
+    config = load_sources_config(str(path))
+    source = config["sources"][0]
+
+    assert source["signal_type"] == "social"
+    assert source["trust_tier"] == "official"
+    assert source["ingestion_mode"] == "direct"
+    assert source["source_kind"] == "account"
+    assert source["watch_priority"] == "normal"
+
+
+def test_load_sources_config_applies_default_tavily_success_cooldown(tmp_path: Path) -> None:
+    path = tmp_path / "sources.yaml"
+    path.write_text(
+        "sources:\n"
+        "  - name: tavily_grants_discovery\n"
+        "    fetch_method: tavily_search\n"
+        "    category: grant\n"
+        "    ecosystem: multi\n"
+        "    enabled: true\n",
+        encoding="utf-8",
+    )
+
+    config = load_sources_config(str(path))
+    source = config["sources"][0]
+
+    assert source["success_cooldown_minutes"] == 2880
+
+
+def test_load_sources_config_applies_default_tavily_budget(tmp_path: Path) -> None:
+    path = tmp_path / "sources.yaml"
+    path.write_text(
+        "sources:\n"
+        "  - name: tavily_hackathons_discovery\n"
+        "    fetch_method: tavily_search\n"
+        "    category: hackathon\n"
+        "    ecosystem: multi\n"
+        "    enabled: true\n",
+        encoding="utf-8",
+    )
+
+    config = load_sources_config(str(path))
+    source = config["sources"][0]
+
+    assert source["max_sources_per_run"] == 4

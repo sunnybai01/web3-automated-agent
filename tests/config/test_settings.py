@@ -13,3 +13,33 @@ def test_defillama_chains_url_defaults_to_v2_endpoint(monkeypatch) -> None:
     settings = Settings()
 
     assert settings.DEFILLAMA_CHAINS_URL == "https://api.llama.fi/v2/chains"
+
+
+def test_twitter_settings_have_safe_defaults(monkeypatch) -> None:
+    monkeypatch.delenv("TWITTER_AUTH_INFO_1", raising=False)
+    monkeypatch.delenv("TWITTER_AUTH_INFO_2", raising=False)
+    monkeypatch.delenv("TWITTER_PASSWORD", raising=False)
+    monkeypatch.delenv("TWITTER_TOTP_SECRET", raising=False)
+    monkeypatch.delenv("TWITTER_COOKIES_FILE", raising=False)
+    monkeypatch.delenv("SOCIAL_WATCH_INTERVAL_MINUTES", raising=False)
+    monkeypatch.delenv("TWITTER_FETCH_COUNT", raising=False)
+
+    settings = Settings()
+
+    assert settings.TWITTER_AUTH_INFO_1 == ""
+    assert settings.TWITTER_AUTH_INFO_2 == ""
+    assert settings.TWITTER_PASSWORD == ""
+    assert settings.TWITTER_TOTP_SECRET == ""
+    assert settings.TWITTER_COOKIES_FILE == ".twitter-cookies.json"
+    assert settings.SOCIAL_WATCH_INTERVAL_MINUTES == 15
+    assert settings.TWITTER_FETCH_COUNT == 20
+
+
+def test_tavily_cooldown_has_safe_default(monkeypatch) -> None:
+    monkeypatch.delenv("TAVILY_SUCCESS_COOLDOWN_MINUTES", raising=False)
+    monkeypatch.delenv("TAVILY_MAX_SOURCES_PER_RUN", raising=False)
+
+    settings = Settings()
+
+    assert settings.TAVILY_SUCCESS_COOLDOWN_MINUTES == 2880
+    assert settings.TAVILY_MAX_SOURCES_PER_RUN == 4

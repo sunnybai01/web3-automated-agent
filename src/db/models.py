@@ -109,6 +109,20 @@ class SourceHealth(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
+class TwitterSourceState(Base):
+    """Per-source Twitter cursor and cooldown state."""
+    __tablename__ = "twitter_source_state"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    source_name = Column(String(128), unique=True, nullable=False, index=True)
+    last_tweet_id = Column(String(64), nullable=True)
+    cursor = Column(Text, nullable=True)
+    auth_profile = Column(String(64), nullable=True)
+    cooldown_until = Column(DateTime(timezone=True), nullable=True)
+    last_fetched_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class ScheduleLog(Base):
     """Job execution audit log."""
     __tablename__ = "schedule_log"

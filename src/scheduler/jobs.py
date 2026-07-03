@@ -14,6 +14,7 @@ GRANT_HACKATHON_SCHEDULE = "0 9,21 * * *"   # 09:00, 21:00 daily
 BOUNTY_SCHEDULE = "0 */2 * * *"              # every 2 hours
 HEARTBEAT_SCHEDULE = f"*/{settings.HEARTBEAT_INTERVAL_MINUTES} * * * *"
 DEFILLAMA_SYNC_SCHEDULE = settings.DEFILLAMA_SYNC_CRON
+SOCIAL_WATCH_INTERVAL_MINUTES = max(1, int(settings.SOCIAL_WATCH_INTERVAL_MINUTES))
 
 
 def _heartbeat_trigger():
@@ -22,12 +23,17 @@ def _heartbeat_trigger():
     return IntervalTrigger(minutes=minutes)
 
 
+def _social_watch_trigger():
+    """Build the polling trigger for Twitter social watch."""
+    return IntervalTrigger(minutes=max(1, int(settings.SOCIAL_WATCH_INTERVAL_MINUTES)))
+
+
 def create_scheduler() -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone="Asia/Shanghai")
     return scheduler
 
 
-def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, defillama_sync_fn):
+def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, defillama_sync_fn, social_watch_fn):
     """Register all scheduled jobs on the given scheduler.
 
     Args:
@@ -54,6 +60,15 @@ def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, def
         replace_existing=True,
     )
 
+    # Social watch — medium-frequency polling
+    scheduler.add_job(
+        social_watch_fn,
+        trigger=_social_watch_trigger(),
+        id="pipeline_social_watch",
+        name="Twitter Social Watch Pipeline",
+        replace_existing=True,
+    )
+
     # Heartbeat + health check
     scheduler.add_job(
         heartbeat_fn,
@@ -75,5 +90,6 @@ def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, def
     logger.info(
         f"Registered jobs: grant_hackathon({GRANT_HACKATHON_SCHEDULE}), "
         f"bounty({BOUNTY_SCHEDULE}), heartbeat({HEARTBEAT_SCHEDULE}), "
+        f"social_watch({settings.SOCIAL_WATCH_INTERVAL_MINUTES}m), "
         f"defillama_sync({'disabled' if not settings.DEFILLAMA_SYNC_ENABLED else DEFILLAMA_SYNC_SCHEDULE})"
     )

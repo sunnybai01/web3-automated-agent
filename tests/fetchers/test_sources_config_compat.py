@@ -144,3 +144,92 @@ def test_phase_one_official_sources_have_expected_metadata() -> None:
     assert base_grants["enabled"] is False
     assert base_grants["fetch_method"] == "rss"
     assert base_grants["url"] == "https://paragraph.com/api/blogs/rss/%40grants.base.eth"
+
+
+def test_repo_sources_include_stellar_scf_rfp_track() -> None:
+    config = load_sources_config()
+
+    stellar_rfp = next(
+        item for item in config["sources"] if item["name"] == "stellar_scf_rfp_track"
+    )
+
+    assert stellar_rfp["fetch_method"] == "web_scraper"
+    assert stellar_rfp["schedule"] == "grant_hackathon"
+    assert stellar_rfp["category"] == "grant"
+    assert stellar_rfp["chain"] == "stellar"
+    assert stellar_rfp["source_tier"] == "official"
+    assert stellar_rfp["official"] is True
+    assert stellar_rfp["enabled"] is True
+    assert stellar_rfp["url"] == "https://stellar.gitbook.io/scf-handbook/scf-awards/build-award/rfp-track"
+
+
+def test_repo_sources_include_social_watch_twitter_sources() -> None:
+    config = load_sources_config()
+    social_sources = [
+        source for source in config["sources"]
+        if source.get("schedule") == "social_watch"
+    ]
+
+    names = {source["name"] for source in social_sources}
+
+    assert "twitter_gitcoin" in names
+    assert "twitter_ethglobal" in names
+    assert any(source.get("ingestion_mode") == "preprocessed" for source in social_sources)
+
+
+def test_repo_sources_include_requested_core_twitter_accounts() -> None:
+    config = load_sources_config()
+    social_sources = {
+        source["name"]: source
+        for source in config["sources"]
+        if source.get("schedule") == "social_watch"
+    }
+
+    expected_screen_names = {
+        "twitter_superteamearn": "SuperteamEarn",
+        "twitter_bountycaster": "bountycaster",
+        "twitter_dorahacks": "DoraHacks",
+        "twitter_gitcoin": "gitcoin",
+        "twitter_buildonbase": "BuildOnBase",
+        "twitter_ef_esp": "EF_ESP",
+        "twitter_arbitrum": "Arbitrum",
+        "twitter_optimism": "Optimism",
+        "twitter_suinetwork": "SuiNetwork",
+        "twitter_aptosfoundation": "AptosFoundation",
+        "twitter_monad_xyz": "Monad_xyz",
+        "twitter_berachain": "berachain",
+        "twitter_megalabs_xyz": "MegaLabs_xyz",
+    }
+
+    for name, screen_name in expected_screen_names.items():
+        assert name in social_sources
+        assert social_sources[name]["screen_name"] == screen_name
+
+
+def test_requested_core_twitter_accounts_are_enabled_for_social_watch_scan() -> None:
+    config = load_sources_config()
+    social_sources = {
+        source["name"]: source
+        for source in config["sources"]
+        if source.get("schedule") == "social_watch"
+    }
+
+    expected_enabled = {
+        "twitter_superteamearn",
+        "twitter_bountycaster",
+        "twitter_dorahacks",
+        "twitter_gitcoin",
+        "twitter_ethglobal",
+        "twitter_buildonbase",
+        "twitter_ef_esp",
+        "twitter_arbitrum",
+        "twitter_optimism",
+        "twitter_suinetwork",
+        "twitter_aptosfoundation",
+        "twitter_monad_xyz",
+        "twitter_berachain",
+        "twitter_megalabs_xyz",
+    }
+
+    for name in expected_enabled:
+        assert social_sources[name]["enabled"] is True

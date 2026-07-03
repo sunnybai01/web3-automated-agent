@@ -46,10 +46,21 @@ class Settings:
     # Search / discovery
     GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")
     TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
+    TAVILY_SUCCESS_COOLDOWN_MINUTES: int = int(os.getenv("TAVILY_SUCCESS_COOLDOWN_MINUTES", "5760"))
+    TAVILY_MAX_SOURCES_PER_RUN: int = int(os.getenv("TAVILY_MAX_SOURCES_PER_RUN", "1"))
     DEFILLAMA_CHAINS_URL: str = os.getenv("DEFILLAMA_CHAINS_URL", "https://api.llama.fi/v2/chains")
     DEFILLAMA_SYNC_ENABLED: bool = os.getenv("DEFILLAMA_SYNC_ENABLED", "true").lower() == "true"
     DEFILLAMA_SYNC_CRON: str = os.getenv("DEFILLAMA_SYNC_CRON", "30 6 * * *")
     DEFILLAMA_SYNC_TOP_N: int = int(os.getenv("DEFILLAMA_SYNC_TOP_N", "50"))
+
+    # Twitter (Twikit)
+    TWITTER_AUTH_INFO_1: str = os.getenv("TWITTER_AUTH_INFO_1", "")
+    TWITTER_AUTH_INFO_2: str = os.getenv("TWITTER_AUTH_INFO_2", "")
+    TWITTER_PASSWORD: str = os.getenv("TWITTER_PASSWORD", "")
+    TWITTER_TOTP_SECRET: str = os.getenv("TWITTER_TOTP_SECRET", "")
+    TWITTER_COOKIES_FILE: str = os.getenv("TWITTER_COOKIES_FILE", ".twitter-cookies.json")
+    SOCIAL_WATCH_INTERVAL_MINUTES: int = int(os.getenv("SOCIAL_WATCH_INTERVAL_MINUTES", "15"))
+    TWITTER_FETCH_COUNT: int = int(os.getenv("TWITTER_FETCH_COUNT", "20"))
 
     # App
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")

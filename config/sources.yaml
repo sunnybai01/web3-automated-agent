@@ -170,6 +170,19 @@ sources:
     official: true
     enabled: false
 
+  - name: stellar_scf_rfp_track
+    type: web_scraper
+    url: https://stellar.gitbook.io/scf-handbook/scf-awards/build-award/rfp-track
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: stellar
+    chain: stellar
+    fetch_method: web_scraper
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: true
+
   - name: sui_foundation
     type: rss
     url: https://blog.sui.io/feed
@@ -498,144 +511,308 @@ sources:
     enabled: true
 
   # =========================================================================
-  # Twitter/X — via RSSHub bridge (daily)
-  # NOTE: Temporarily disabled due to rsshub.app /twitter/user/* upstream
-  # redirecting to google.com/404 (2026-07-02).
+  # Twitter/X — via Twikit-backed social watch.
+  # NOTE: These sources remain disabled by default until a valid X login
+  # session is configured through environment variables.
   # =========================================================================
 
   - name: twitter_gitcoin
-    type: rsshub
-    url: "https://rsshub.app/twitter/user/gitcoin"
-    schedule: grant_hackathon
+    type: twitter
+    screen_name: gitcoin
+    schedule: social_watch
     category: social
     ecosystem: multi
-    fetch_method: rsshub
-    enabled: false
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: high
+    enabled: true
 
   - name: twitter_ethglobal
-    type: rsshub
-    url: "https://rsshub.app/twitter/user/ethglobal"
-    schedule: grant_hackathon
+    type: twitter
+    screen_name: ethglobal
+    schedule: social_watch
     category: social
     ecosystem: ethereum
-    fetch_method: rsshub
-    enabled: false
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: high
+    enabled: true
 
   - name: twitter_ef_esp
-    type: rsshub
-    url: "https://rsshub.app/twitter/user/EF_ESP"
-    schedule: grant_hackathon
+    type: twitter
+    screen_name: EF_ESP
+    schedule: social_watch
     category: social
     ecosystem: ethereum
-    fetch_method: rsshub
-    enabled: false
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: normal
+    enabled: true
 
   - name: twitter_optimism
-    type: rsshub
-    url: "https://rsshub.app/twitter/user/OptimismGov"
-    schedule: grant_hackathon
+    type: twitter
+    screen_name: Optimism
+    schedule: social_watch
     category: social
     ecosystem: optimism
-    fetch_method: rsshub
-    enabled: false
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: normal
+    enabled: true
 
   - name: twitter_solanafndn
-    type: rsshub
-    url: "https://rsshub.app/twitter/user/SolanaFndn"
-    schedule: grant_hackathon
+    type: twitter
+    screen_name: SolanaFndn
+    schedule: social_watch
     category: social
     ecosystem: solana
-    fetch_method: rsshub
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: normal
     enabled: false
 
   - name: twitter_immunefi
-    type: rsshub
-    url: "https://rsshub.app/twitter/user/immunefi"
-    schedule: bounty
+    type: twitter
+    screen_name: immunefi
+    schedule: social_watch
     category: social
     ecosystem: multi
-    fetch_method: rsshub
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: high
     enabled: false
 
   - name: twitter_suinetwork
-    type: rsshub
-    url: "https://rsshub.app/twitter/user/SuiNetwork"
-    schedule: grant_hackathon
+    type: twitter
+    screen_name: SuiNetwork
+    schedule: social_watch
     category: social
     ecosystem: sui
-    fetch_method: rsshub
-    enabled: false
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: normal
+    enabled: true
 
   - name: twitter_stellarorg
-    type: rsshub
-    url: "https://rsshub.app/twitter/user/StellarOrg"
-    schedule: grant_hackathon
+    type: twitter
+    screen_name: StellarOrg
+    schedule: social_watch
     category: social
     ecosystem: stellar
-    fetch_method: rsshub
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: normal
     enabled: false
 
   - name: twitter_dorahacks
-    type: rsshub
-    url: "https://rsshub.app/twitter/user/DoraHacks"
-    schedule: grant_hackathon
+    type: twitter
+    screen_name: DoraHacks
+    schedule: social_watch
     category: social
     ecosystem: multi
-    fetch_method: rsshub
-    enabled: false
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: normal
+    enabled: true
 
-  - name: twitter_aptos
-    type: rsshub
-    url: "https://rsshub.app/twitter/user/Aptos"
-    schedule: grant_hackathon
+  - name: twitter_superteamearn
+    type: twitter
+    screen_name: SuperteamEarn
+    schedule: social_watch
+    category: social
+    ecosystem: solana
+    fetch_method: twitter
+    trust_tier: discovery
+    ingestion_mode: preprocessed
+    source_kind: account
+    watch_priority: high
+    enabled: true
+
+  - name: twitter_bountycaster
+    type: twitter
+    screen_name: bountycaster
+    schedule: social_watch
+    category: social
+    ecosystem: multi
+    fetch_method: twitter
+    trust_tier: discovery
+    ingestion_mode: preprocessed
+    source_kind: account
+    watch_priority: high
+    enabled: true
+
+  - name: twitter_buildonbase
+    type: twitter
+    screen_name: BuildOnBase
+    schedule: social_watch
+    category: social
+    ecosystem: base
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: high
+    enabled: true
+
+  - name: twitter_arbitrum
+    type: twitter
+    screen_name: Arbitrum
+    schedule: social_watch
+    category: social
+    ecosystem: arbitrum
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: high
+    enabled: true
+
+  - name: twitter_aptosfoundation
+    type: twitter
+    screen_name: AptosFoundation
+    schedule: social_watch
     category: social
     ecosystem: aptos
-    fetch_method: rsshub
-    enabled: false
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: normal
+    enabled: true
 
   - name: twitter_starknet
-    type: rsshub
-    url: "https://rsshub.app/twitter/user/StarknetFndn"
-    schedule: grant_hackathon
+    type: twitter
+    screen_name: StarknetFndn
+    schedule: social_watch
     category: social
     ecosystem: starknet
-    fetch_method: rsshub
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: normal
     enabled: false
 
   - name: twitter_polygon
-    type: rsshub
-    url: "https://rsshub.app/twitter/user/0xPolygonFdn"
-    schedule: grant_hackathon
+    type: twitter
+    screen_name: 0xPolygonFdn
+    schedule: social_watch
     category: social
     ecosystem: polygon
-    fetch_method: rsshub
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: normal
     enabled: false
 
   - name: twitter_uniswap
-    type: rsshub
-    url: "https://rsshub.app/twitter/user/UniswapFnd"
-    schedule: grant_hackathon
+    type: twitter
+    screen_name: UniswapFnd
+    schedule: social_watch
     category: social
     ecosystem: ethereum
-    fetch_method: rsshub
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: normal
     enabled: false
 
   - name: twitter_superteamdao
-    type: rsshub
-    url: "https://rsshub.app/twitter/user/SuperteamDAO"
-    schedule: bounty
+    type: twitter
+    screen_name: SuperteamDAO
+    schedule: social_watch
     category: social
     ecosystem: solana
-    fetch_method: rsshub
+    fetch_method: twitter
+    trust_tier: discovery
+    ingestion_mode: preprocessed
+    source_kind: account
+    watch_priority: normal
     enabled: false
 
+  - name: twitter_monad_xyz
+    type: twitter
+    screen_name: Monad_xyz
+    schedule: social_watch
+    category: social
+    ecosystem: monad
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: high
+    enabled: true
+
+  - name: twitter_berachain
+    type: twitter
+    screen_name: berachain
+    schedule: social_watch
+    category: social
+    ecosystem: berachain
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: high
+    enabled: true
+
+  - name: twitter_megalabs_xyz
+    type: twitter
+    screen_name: MegaLabs_xyz
+    schedule: social_watch
+    category: social
+    ecosystem: megaeth
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: high
+    enabled: true
+
   - name: twitter_aave
-    type: rsshub
-    url: "https://rsshub.app/twitter/user/AaveGrants"
-    schedule: grant_hackathon
+    type: twitter
+    screen_name: AaveGrants
+    schedule: social_watch
     category: social
     ecosystem: ethereum
-    fetch_method: rsshub
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: normal
+    enabled: false
+
+  - name: twitter_builder_alpha_list
+    type: twitter
+    list_id: "0000000000000000000"
+    schedule: social_watch
+    category: social
+    ecosystem: multi
+    fetch_method: twitter
+    trust_tier: discovery
+    ingestion_mode: preprocessed
+    source_kind: list
+    watch_priority: low
     enabled: false
 
   # =========================================================================

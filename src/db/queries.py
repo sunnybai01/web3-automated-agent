@@ -5,7 +5,7 @@ from typing import Optional, List
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
-from .models import RawSignal, Event, EventSource, SourceHealth, ScheduleLog, PushLog
+from .models import RawSignal, Event, EventSource, SourceHealth, TwitterSourceState, ScheduleLog, PushLog
 
 
 # --- RawSignal ---
@@ -141,6 +141,30 @@ def get_source_health(db: Session, source_name: str) -> Optional[SourceHealth]:
 
 def get_unhealthy_sources(db: Session) -> List[SourceHealth]:
     return db.query(SourceHealth).filter(SourceHealth.status != "healthy").all()
+
+
+def get_twitter_source_state(db: Session, source_name: str) -> Optional[TwitterSourceState]:
+    return db.query(TwitterSourceState).filter(
+        TwitterSourceState.source_name == source_name
+    ).first()
+
+
+def upsert_twitter_source_state(
+    db: Session,
+    source_name: str,
+    **kwargs,
+) -> TwitterSourceState:
+    state = get_twitter_source_state(db, source_name)
+    if state is None:
+        state = TwitterSourceState(source_name=source_name)
+        db.add(state)
+
+    for key, value in kwargs.items():
+        setattr(state, key, value)
+
+    db.commit()
+    db.refresh(state)
+    return state
 
 
 # --- ScheduleLog ---

@@ -27,20 +27,70 @@ class FetchError(Exception):
     """Non-retryable fetch error."""
 
 
+def select_budgeted_sources(
+    sources: List[Dict[str, Any]],
+    health_by_source: Dict[str, Any],
+    schedule: str,
+    *,
+    fetch_method: str,
+    now: Optional[dt.datetime] = None,
+) -> set[str]:
+    """Select the least-recently-fetched runnable sources under a method budget."""
+    now = now or dt.datetime.now(dt.timezone.utc)
+    eligible = []
+    budgets = []
+
+    for source in sources:
+        if source.get("enabled", True) is False:
+            continue
+        if source.get("schedule") != schedule:
+            continue
+        if source.get("fetch_method") != fetch_method:
+            continue
+
+        budget = int(source.get("max_sources_per_run", 0) or 0)
+        if budget > 0:
+            budgets.append(budget)
+
+        name = source.get("name")
+        health = health_by_source.get(name)
+        if get_fetch_skip_reason(source, health, now=now) is not None:
+            continue
+
+        last_fetch_at = getattr(health, "last_fetch_at", None) if health is not None else None
+        eligible.append((name, last_fetch_at))
+
+    if not eligible:
+        return set()
+
+    budget_limit = min(budgets) if budgets else 0
+    if budget_limit <= 0 or len(eligible) <= budget_limit:
+        return {name for name, _ in eligible}
+
+    eligible.sort(key=lambda row: (row[1] is not None, row[1] or dt.datetime.min.replace(tzinfo=dt.timezone.utc), row[0]))
+    return {name for name, _ in eligible[:budget_limit]}
+
+
 def get_fetch_skip_reason(
     config: Dict[str, Any],
     health: Optional[Any],
     now: Optional[dt.datetime] = None,
+    source_state: Optional[Any] = None,
 ) -> Optional[str]:
     """Return a short skip reason when a source is cooling down.
 
     The caller can use this to suppress repeated fetches for sources that are
     currently rate limited or already marked down.
     """
+    now = now or dt.datetime.now(dt.timezone.utc)
+
+    if source_state is not None and getattr(source_state, "cooldown_until", None) is not None:
+        if now < source_state.cooldown_until:
+            return "source_state_cooldown"
+
     if health is None or health.last_fetch_at is None:
         return None
 
-    now = now or dt.datetime.now(dt.timezone.utc)
     last_error = (getattr(health, "last_error", "") or "").lower()
     rate_limit_cooldown = int(config.get("rate_limit_cooldown_minutes", 0) or 0)
     failure_cooldown = int(config.get("failure_cooldown_minutes", 0) or 0)
@@ -54,6 +104,12 @@ def get_fetch_skip_reason(
         retry_at = health.last_fetch_at + dt.timedelta(minutes=failure_cooldown)
         if now < retry_at:
             return "failed_source_cooldown"
+
+    success_cooldown = int(config.get("success_cooldown_minutes", 0) or 0)
+    if success_cooldown > 0 and getattr(health, "last_success_at", None) is not None:
+        retry_at = health.last_success_at + dt.timedelta(minutes=success_cooldown)
+        if now < retry_at:
+            return "success_cooldown"
 
     return None
 
