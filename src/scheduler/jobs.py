@@ -14,6 +14,7 @@ GRANT_HACKATHON_SCHEDULE = "0 9,21 * * *"   # 09:00, 21:00 daily
 BOUNTY_SCHEDULE = "0 */2 * * *"              # every 2 hours
 HEARTBEAT_SCHEDULE = f"*/{settings.HEARTBEAT_INTERVAL_MINUTES} * * * *"
 DEFILLAMA_SYNC_SCHEDULE = settings.DEFILLAMA_SYNC_CRON
+DAILY_SUMMARY_SCHEDULE = settings.DAILY_SUMMARY_CRON
 SOCIAL_WATCH_INTERVAL_MINUTES = max(1, int(settings.SOCIAL_WATCH_INTERVAL_MINUTES))
 
 
@@ -33,7 +34,7 @@ def create_scheduler() -> BackgroundScheduler:
     return scheduler
 
 
-def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, defillama_sync_fn, social_watch_fn):
+def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, defillama_sync_fn, social_watch_fn, daily_summary_fn):
     """Register all scheduled jobs on the given scheduler.
 
     Args:
@@ -87,9 +88,19 @@ def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, def
             replace_existing=True,
         )
 
+    if settings.DAILY_SUMMARY_ENABLED:
+        scheduler.add_job(
+            daily_summary_fn,
+            trigger=CronTrigger.from_crontab(DAILY_SUMMARY_SCHEDULE, timezone="Asia/Shanghai"),
+            id="daily_slack_summary",
+            name="Daily Slack Summary",
+            replace_existing=True,
+        )
+
     logger.info(
         f"Registered jobs: grant_hackathon({GRANT_HACKATHON_SCHEDULE}), "
         f"bounty({BOUNTY_SCHEDULE}), heartbeat({HEARTBEAT_SCHEDULE}), "
         f"social_watch({settings.SOCIAL_WATCH_INTERVAL_MINUTES}m), "
-        f"defillama_sync({'disabled' if not settings.DEFILLAMA_SYNC_ENABLED else DEFILLAMA_SYNC_SCHEDULE})"
+        f"defillama_sync({'disabled' if not settings.DEFILLAMA_SYNC_ENABLED else DEFILLAMA_SYNC_SCHEDULE}), "
+        f"daily_summary({'disabled' if not settings.DAILY_SUMMARY_ENABLED else DAILY_SUMMARY_SCHEDULE})"
     )

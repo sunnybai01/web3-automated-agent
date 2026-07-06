@@ -5,7 +5,18 @@ from typing import Optional, List
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
-from .models import RawSignal, Event, EventSource, SourceHealth, TwitterSourceState, ScheduleLog, PushLog
+from .models import (
+    RawSignal,
+    Event,
+    EventSource,
+    SourceHealth,
+    TwitterSourceState,
+    ScheduleLog,
+    PushLog,
+    AgentMission,
+    AgentTrajectory,
+    DailySummaryLog,
+)
 
 
 # --- RawSignal ---
@@ -218,3 +229,135 @@ def get_push_log_for_event(db: Session, event_id: int) -> Optional[PushLog]:
         PushLog.action == "create",
         PushLog.success == True,
     ).first()
+
+
+# --- Agent Missions ---
+
+def create_agent_mission(
+    db: Session,
+    *,
+    goal: str,
+    event_id: int,
+    mission_type: str = "single_event_investigation",
+    max_steps: int = 3,
+) -> AgentMission:
+    mission = AgentMission(
+        goal=goal,
+        event_id=event_id,
+        mission_type=mission_type,
+        max_steps=max_steps,
+        status="running",
+    )
+    db.add(mission)
+    db.commit()
+    db.refresh(mission)
+    return mission
+
+
+def add_agent_trajectory(
+    db: Session,
+    *,
+    mission_id: int,
+    step_index: int,
+    action: str,
+    thought: str = "",
+    action_input: Optional[dict] = None,
+    observation: Optional[dict] = None,
+) -> AgentTrajectory:
+    trajectory = AgentTrajectory(
+        mission_id=mission_id,
+        step_index=step_index,
+        action=action,
+        thought=thought,
+        action_input=action_input,
+        observation=observation,
+    )
+    db.add(trajectory)
+    db.commit()
+    db.refresh(trajectory)
+    return trajectory
+
+
+def finish_agent_mission(
+    db: Session,
+    mission_id: int,
+    *,
+    status: str,
+    conclusion: Optional[dict] = None,
+    error_message: Optional[str] = None,
+) -> Optional[AgentMission]:
+    mission = db.query(AgentMission).filter(AgentMission.id == mission_id).first()
+    if mission is None:
+        return None
+
+    mission.status = status
+    mission.conclusion = conclusion
+    mission.error_message = error_message
+    mission.finished_at = datetime.datetime.now(datetime.timezone.utc)
+    db.commit()
+    db.refresh(mission)
+    return mission
+
+
+# --- Daily Summary Log ---
+
+def create_daily_summary_log(
+    db: Session,
+    *,
+    summary_date: datetime.date,
+    channel: str = "slack",
+) -> DailySummaryLog:
+    row = DailySummaryLog(
+        summary_date=summary_date,
+        channel=channel,
+        status="running",
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def get_daily_summary_log(
+    db: Session,
+    *,
+    summary_date: datetime.date,
+    channel: str = "slack",
+) -> Optional[DailySummaryLog]:
+    return db.query(DailySummaryLog).filter(
+        DailySummaryLog.summary_date == summary_date,
+        DailySummaryLog.channel == channel,
+    ).first()
+
+
+def mark_daily_summary_sent(
+    db: Session,
+    row_id: int,
+    *,
+    slack_ts: str,
+) -> Optional[DailySummaryLog]:
+    row = db.query(DailySummaryLog).filter(DailySummaryLog.id == row_id).first()
+    if row is None:
+        return None
+    row.status = "success"
+    row.slack_ts = slack_ts
+    row.error_message = None
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def mark_daily_summary_failed(
+    db: Session,
+    row_id: int,
+    *,
+    error_message: str,
+) -> Optional[DailySummaryLog]:
+    row = db.query(DailySummaryLog).filter(DailySummaryLog.id == row_id).first()
+    if row is None:
+        return None
+    row.status = "failed"
+    row.error_message = error_message
+    db.commit()
+    db.refresh(row)
+    return row

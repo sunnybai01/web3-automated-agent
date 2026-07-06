@@ -45,6 +45,59 @@ class VerifyRequest(BaseModel):
     target_event_ids: list[int]
 
 
+class InvestigateRequest(BaseModel):
+    event_id: int
+
+
+class InvestigationMission(BaseModel):
+    id: int
+    goal: str
+    event_id: int
+    status: str
+    mission_type: str
+    max_steps: int
+
+
+class SimilarEventItem(BaseModel):
+    event_id: int
+    title: str
+    ecosystem: str | None = None
+    similarity: float
+
+
+class SupportingEvidenceItem(BaseModel):
+    url: str
+    title: str
+    excerpt: str
+
+
+class InvestigationConclusion(BaseModel):
+    event_id: int
+    title: str
+    verdict: str
+    recommended_action: str
+    summary: str
+    similar_events: list[SimilarEventItem] = []
+    supporting_evidence: SupportingEvidenceItem | None = None
+
+
+class InvestigationTrajectoryStep(BaseModel):
+    step_index: int
+    action: str
+    thought: str = ""
+    action_input: dict = {}
+    observation: dict = {}
+
+
+class InvestigateResponse(BaseModel):
+    status: str
+    event_id: int
+    mission: InvestigationMission
+    conclusion: InvestigationConclusion | None = None
+    trajectory: list[InvestigationTrajectoryStep] = []
+    error: str = ""
+
+
 class ProposeOptionsRequest(BaseModel):
     verified_facts: dict
 
@@ -134,6 +187,39 @@ class DashboardScheduleLogSummary(BaseModel):
 class DashboardScheduleLogsResponse(BaseModel):
     summary: DashboardScheduleLogSummary
     items: list[DashboardScheduleLogItem]
+
+
+class DashboardInvestigationItem(BaseModel):
+    mission_id: int
+    event_id: int
+    status: str
+    started: str
+    finished: str
+    title: str
+    verdict: str
+    recommended_action: str
+    similar_count: int
+    has_supporting_evidence: bool
+    error: str
+
+
+class DashboardInvestigationsSummary(BaseModel):
+    total_runs: int
+    completed: int
+    failed: int
+    running: int
+
+
+class DashboardInvestigationsResponse(BaseModel):
+    summary: DashboardInvestigationsSummary
+    items: list[DashboardInvestigationItem]
+
+
+class DailySummaryTriggerResponse(BaseModel):
+    status: str
+    summary_date: str
+    slack_ts: str = ""
+    error: str = ""
 
 
 class ManualScanScheduleResult(BaseModel):

@@ -3,11 +3,15 @@ from fastapi import Depends, FastAPI, Query
 from .auth import verify_internal_key
 
 from .schemas import (
+    DailySummaryTriggerResponse,
+    DashboardInvestigationsResponse,
     ManualScanStatusResponse,
     DashboardScheduleLogsResponse,
     DashboardSourceHealthResponse,
     DashboardOpportunitiesResponse,
     HealthResponse,
+    InvestigateRequest,
+    InvestigateResponse,
     ProposeOptionsRequest,
     ProposeOptionsResponse,
     SelectTargetsRequest,
@@ -75,6 +79,18 @@ def dashboard_schedule_logs(limit: int = 50) -> DashboardScheduleLogsResponse:
 
 
 @app.get(
+    "/api/v1/dashboard/investigations",
+    response_model=DashboardInvestigationsResponse,
+    dependencies=[Depends(verify_internal_key)],
+)
+def dashboard_investigations(limit: int = 50) -> DashboardInvestigationsResponse:
+    from . import dashboard_service
+
+    result = dashboard_service.list_investigations(limit=limit)
+    return DashboardInvestigationsResponse(**result)
+
+
+@app.get(
     "/api/v1/dashboard/manual-scan",
     response_model=ManualScanStatusResponse,
     dependencies=[Depends(verify_internal_key)],
@@ -99,6 +115,18 @@ def trigger_manual_scan() -> ManualScanStatusResponse:
     return ManualScanStatusResponse(**result)
 
 
+@app.post(
+    "/api/v1/dashboard/daily-summary",
+    response_model=DailySummaryTriggerResponse,
+    dependencies=[Depends(verify_internal_key)],
+)
+def trigger_daily_summary() -> DailySummaryTriggerResponse:
+    from . import daily_summary_api_service
+
+    result = daily_summary_api_service.trigger_daily_summary()
+    return DailySummaryTriggerResponse(**result)
+
+
 @app.post("/api/v1/chat/select-targets", response_model=SelectTargetsResponse)
 def select_targets(payload: SelectTargetsRequest) -> SelectTargetsResponse:
     from . import selection_service
@@ -118,6 +146,18 @@ def verify(payload: VerifyRequest) -> VerifyResponse:
 
     result = verify_service.verify_targets(payload.target_event_ids)
     return VerifyResponse(**result)
+
+
+@app.post(
+    "/api/v1/chat/investigate",
+    response_model=InvestigateResponse,
+    dependencies=[Depends(verify_internal_key)],
+)
+def investigate(payload: InvestigateRequest) -> InvestigateResponse:
+    from . import investigation_api_service
+
+    result = investigation_api_service.investigate_event_by_id(payload.event_id)
+    return InvestigateResponse(**result)
 
 
 @app.post(

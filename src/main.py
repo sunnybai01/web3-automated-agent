@@ -6,6 +6,7 @@ Wires together the full V1 pipeline:
 import logging
 import sys
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from config.settings import settings
 from src.db.database import init_db, SessionLocal
@@ -20,6 +21,7 @@ from src.classifier.classifier import OpportunityClassifier
 from src.classifier.scorer import OpportunityScorer
 from src.verifier.verifier import verify_opportunity
 from src.dispatch.slack_client import SlackDispatcher
+from src.dispatch.daily_summary_service import build_daily_summary
 from src.dispatch.report_writer import generate_report
 from src.dispatch.heartbeat import heartbeat, increment_stat, reset_daily_stats
 from src.scheduler.jobs import create_scheduler, register_jobs
@@ -32,6 +34,10 @@ from src.db.queries import (
     update_event,
     get_push_log_for_event,
     create_push_log,
+    get_daily_summary_log,
+    create_daily_summary_log,
+    mark_daily_summary_sent,
+    mark_daily_summary_failed,
 )
 
 logging.basicConfig(
@@ -82,6 +88,13 @@ def _init_components():
         llm = LLMGateway()
         _classifier = OpportunityClassifier(kw, llm)
         _scorer = OpportunityScorer(llm)
+
+    if _slack is None:
+        _slack = SlackDispatcher()
+
+
+def _init_slack():
+    global _slack
 
     if _slack is None:
         _slack = SlackDispatcher()
@@ -370,6 +383,38 @@ def run_social_watch():
     return run_pipeline("social_watch")
 
 
+def run_daily_summary():
+    """Build and send the once-per-day Slack summary."""
+    _init_slack()
+
+    db = SessionLocal()
+    try:
+        summary_date = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+        existing = get_daily_summary_log(db, summary_date=summary_date, channel="slack")
+        if existing is not None and existing.status == "success":
+            logger.info("Daily summary already sent for %s; skipping", summary_date.isoformat())
+            return {"status": "skipped", "summary_date": summary_date.isoformat()}
+
+        log_row = existing or create_daily_summary_log(db, summary_date=summary_date, channel="slack")
+        payload = build_daily_summary(db, summary_date=summary_date)
+        payload["totals"]["pushed"] = payload["totals"].get("pushed", 0)
+
+        slack_ts = _slack.send_daily_summary(payload)
+        if not slack_ts:
+            mark_daily_summary_failed(db, log_row.id, error_message="slack_send_failed_or_not_configured")
+            return {
+                "status": "failed",
+                "summary_date": summary_date.isoformat(),
+                "error": "slack_send_failed_or_not_configured",
+            }
+
+        mark_daily_summary_sent(db, log_row.id, slack_ts=slack_ts)
+        logger.info("Daily summary sent for %s", summary_date.isoformat())
+        return {"status": "success", "summary_date": summary_date.isoformat(), "slack_ts": slack_ts}
+    finally:
+        db.close()
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -382,7 +427,7 @@ def main():
 
     # Create scheduler
     scheduler = create_scheduler()
-    register_jobs(scheduler, run_pipeline, run_heartbeat, run_defillama_candidate_sync, run_social_watch)
+    register_jobs(scheduler, run_pipeline, run_heartbeat, run_defillama_candidate_sync, run_social_watch, run_daily_summary)
     scheduler.start()
     logger.info("Scheduler started — waiting for jobs...")
 

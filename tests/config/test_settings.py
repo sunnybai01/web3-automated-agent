@@ -43,3 +43,13 @@ def test_tavily_cooldown_has_safe_default(monkeypatch) -> None:
 
     assert settings.TAVILY_SUCCESS_COOLDOWN_MINUTES == 2880
     assert settings.TAVILY_MAX_SOURCES_PER_RUN == 4
+
+
+def test_daily_summary_settings_have_safe_defaults(monkeypatch) -> None:
+    monkeypatch.delenv("DAILY_SUMMARY_ENABLED", raising=False)
+    monkeypatch.delenv("DAILY_SUMMARY_CRON", raising=False)
+
+    settings = Settings()
+
+    assert settings.DAILY_SUMMARY_ENABLED is True
+    assert settings.DAILY_SUMMARY_CRON == "55 23 * * *"

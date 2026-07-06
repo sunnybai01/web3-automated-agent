@@ -65,6 +65,8 @@ class Settings:
     # App
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     HEARTBEAT_INTERVAL_MINUTES: int = int(os.getenv("HEARTBEAT_INTERVAL_MINUTES", "30"))
+    DAILY_SUMMARY_ENABLED: bool = os.getenv("DAILY_SUMMARY_ENABLED", "true").lower() == "true"
+    DAILY_SUMMARY_CRON: str = os.getenv("DAILY_SUMMARY_CRON", "55 23 * * *")
     SLIDING_WINDOW_DAYS: int = 14
     SIMILARITY_THRESHOLD: float = 0.85
 

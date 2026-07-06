@@ -72,6 +72,7 @@ cp .env.example .env
 - Tavily 调度控制：`TAVILY_SUCCESS_COOLDOWN_MINUTES` `TAVILY_MAX_SOURCES_PER_RUN`
 - Twitter：`TWITTER_AUTH_INFO_1` `TWITTER_AUTH_INFO_2` `TWITTER_PASSWORD` `TWITTER_TOTP_SECRET` `TWITTER_COOKIES_FILE`
 - 运行：`LOG_LEVEL` `HEARTBEAT_INTERVAL_MINUTES` `SOCIAL_WATCH_INTERVAL_MINUTES` `TWITTER_FETCH_COUNT`
+- 每日汇总：`DAILY_SUMMARY_ENABLED` `DAILY_SUMMARY_CRON`
 
 当前 Tavily 默认值：
 
@@ -118,6 +119,7 @@ docker compose up -d --force-recreate agent-app
 - `bounty`：每 2 小时
 - `social_watch`：每 `SOCIAL_WATCH_INTERVAL_MINUTES` 分钟
 - `heartbeat`：每 `HEARTBEAT_INTERVAL_MINUTES` 分钟
+- `daily_summary`：每天按 `DAILY_SUMMARY_CRON` 发送 Slack 日报（默认 23:55，Asia/Shanghai）
 
 启动时会先立即跑一次：
 
@@ -144,6 +146,8 @@ Twitter 说明：
 
 - 有有效机会数据时：发送机会卡片；并上传当轮完整报告文件
 - 无有效机会数据时：不发送卡片，不上传报告文件
+- 每日汇总 job 会固定发送一次日报；即使当天没有新的 qualified opportunities，也会发送当天的抓取/去重/验证摘要
+- 若当天存在新的 qualified opportunities，日报会额外列出这些新增事件及其对应的 source names
 
 Slack 附件上传需要 Bot Scope：
 

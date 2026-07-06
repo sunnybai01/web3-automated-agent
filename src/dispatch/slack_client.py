@@ -220,6 +220,44 @@ class SlackDispatcher:
         except SlackApiError:
             return False
 
+    def send_daily_summary(self, summary: Dict[str, Any]) -> Optional[str]:
+        """Send a once-per-day operator summary to Slack."""
+        if not self._configured:
+            return None
+
+        totals = summary.get("totals", {})
+        source_names = summary.get("new_event_sources", []) or []
+        new_events = summary.get("new_events", []) or []
+        summary_date = summary.get("summary_date", "unknown-date")
+
+        lines = [
+            f"*Daily Summary · {summary_date}*",
+            f"Fetched: {totals.get('fetched', 0)} | New: {totals.get('new', 0)} | Deduped: {totals.get('deduped', 0)} | Classified: {totals.get('classified', 0)} | Verified: {totals.get('verified', 0)} | Pushed: {totals.get('pushed', 0)}",
+        ]
+
+        if new_events:
+            lines.append(f"New qualified opportunities: {len(new_events)}")
+            lines.append(f"Sources: {', '.join(source_names)}")
+            for event in new_events[:10]:
+                lines.append(
+                    f"- [{str(event.get('event_type') or 'other').upper()}] {event.get('title', 'Untitled')}"
+                )
+        else:
+            lines.append("No new qualified opportunities today.")
+
+        text = "\n".join(lines)
+
+        try:
+            resp = self.client.chat_postMessage(
+                channel=self.channel_id,
+                text=text,
+                unfurl_links=False,
+            )
+            return resp["ts"]
+        except SlackApiError as e:
+            logger.error(f"Slack daily summary failed: {e.response['error']}")
+            return None
+
     def upload_report(self, report_path: Path, schedule: str, stats: Dict[str, Any]) -> bool:
         """Upload a generated Markdown report file to Slack as an attachment."""
         if not self._configured:

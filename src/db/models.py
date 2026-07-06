@@ -1,6 +1,6 @@
 import datetime
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, Float,
+    Column, Integer, String, Text, DateTime, Date, Float,
     ForeignKey, UniqueConstraint, Index, JSON, Boolean,
 )
 from sqlalchemy.orm import relationship
@@ -152,3 +152,62 @@ class PushLog(Base):
     slack_ts = Column(String(64), nullable=True)
     success = Column(Boolean, default=True)
     error_message = Column(Text, nullable=True)
+
+
+class AgentMission(Base):
+    """Run-level record for an agent-driven investigation mission."""
+    __tablename__ = "agent_missions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    goal = Column(String(255), nullable=False, index=True)
+    event_id = Column(Integer, nullable=False, index=True)
+    status = Column(String(32), default="running", index=True)  # running|completed|failed
+    mission_type = Column(String(64), default="single_event_investigation")
+    max_steps = Column(Integer, default=3)
+    conclusion = Column(JSON, nullable=True)
+    error_message = Column(Text, nullable=True)
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+
+    trajectories = relationship(
+        "AgentTrajectory",
+        back_populates="mission",
+        cascade="all, delete-orphan",
+    )
+
+
+class AgentTrajectory(Base):
+    """Step-by-step trace of what the agent did during a mission."""
+    __tablename__ = "agent_trajectories"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    mission_id = Column(Integer, ForeignKey("agent_missions.id", ondelete="CASCADE"), nullable=False, index=True)
+    step_index = Column(Integer, nullable=False)
+    action = Column(String(64), nullable=False)
+    thought = Column(Text, nullable=True)
+    action_input = Column(JSON, nullable=True)
+    observation = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    mission = relationship("AgentMission", back_populates="trajectories")
+
+    __table_args__ = (
+        UniqueConstraint("mission_id", "step_index", name="uq_agent_mission_step"),
+    )
+
+
+class DailySummaryLog(Base):
+    """One-row-per-day send audit for daily summary delivery."""
+    __tablename__ = "daily_summary_log"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    summary_date = Column(Date, nullable=False, index=True)
+    channel = Column(String(32), nullable=False, default="slack")
+    status = Column(String(16), default="running")  # running|success|failed
+    slack_ts = Column(String(64), nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("summary_date", "channel", name="uq_daily_summary_date_channel"),
+    )

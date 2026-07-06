@@ -57,6 +57,59 @@ export type MixedModeResult = {
   options: ProposeOptionsResponse;
 };
 
+export type InvestigateRequest = {
+  event_id: number;
+};
+
+export type InvestigationMission = {
+  id: number;
+  goal: string;
+  event_id: number;
+  status: string;
+  mission_type: string;
+  max_steps: number;
+};
+
+export type InvestigationSimilarEvent = {
+  event_id: number;
+  title: string;
+  ecosystem: string | null;
+  similarity: number;
+};
+
+export type InvestigationSupportingEvidence = {
+  url: string;
+  title: string;
+  excerpt: string;
+};
+
+export type InvestigationConclusion = {
+  event_id: number;
+  title: string;
+  verdict: string;
+  recommended_action: string;
+  summary: string;
+  similar_events: InvestigationSimilarEvent[];
+  supporting_evidence: InvestigationSupportingEvidence | null;
+};
+
+export type InvestigationTrajectoryStep = {
+  step_index: number;
+  action: string;
+  thought: string;
+  action_input: Record<string, unknown>;
+  observation: Record<string, unknown>;
+};
+
+export type InvestigationResponse = {
+  status: string;
+  event_id: number;
+  mission: InvestigationMission;
+  conclusion: InvestigationConclusion | null;
+  trajectory: InvestigationTrajectoryStep[];
+  error: string;
+};
+
 export type DashboardOpportunityItem = {
   id: number;
   score: number | null;
@@ -155,5 +208,12 @@ export type ManualScanStatusResponse = {
   finished_at: string;
   current_stage: string;
   schedules: ManualScanScheduleResult[];
+  error: string;
+};
+
+export type DailySummaryTriggerResponse = {
+  status: string;
+  summary_date: string;
+  slack_ts: string;
   error: string;
 };

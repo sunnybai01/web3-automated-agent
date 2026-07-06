@@ -12,6 +12,7 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy import desc
 from src.db.database import SessionLocal, init_db
 from src.db.models import Event, SourceHealth, ScheduleLog
+from src.chat_api import dashboard_service
 
 init_db()
 
@@ -30,7 +31,7 @@ min_score = st.sidebar.slider("Min Score", 0.0, 10.0, 5.0, 0.5)
 days = st.sidebar.slider("Last N days", 1, 30, 14)
 
 # --- Main area ---
-tab1, tab2, tab3 = st.tabs(["📋 Opportunities", "📊 Source Health", "📜 Schedule Logs"])
+tab1, tab2, tab3, tab4 = st.tabs(["📋 Opportunities", "📊 Source Health", "📜 Schedule Logs", "🧭 Investigations"])
 
 with tab1:
     st.header("Active Opportunities")
@@ -138,6 +139,41 @@ with tab3:
             st.dataframe(df, hide_index=True, use_container_width=True)
     finally:
         db.close()
+
+with tab4:
+    st.header("Agent Investigations")
+    result = dashboard_service.list_investigations(limit=50)
+    summary = result.get("summary", {})
+    items = result.get("items", [])
+
+    if not items:
+        st.info("No investigation runs yet.")
+    else:
+        df = pd.DataFrame(
+            [
+                {
+                    "Mission": item["mission_id"],
+                    "Event": item["event_id"],
+                    "Status": item["status"],
+                    "Started": item["started"],
+                    "Finished": item["finished"] or "-",
+                    "Title": item["title"][:120] if item["title"] else "",
+                    "Verdict": item["verdict"],
+                    "Action": item["recommended_action"],
+                    "Similar": item["similar_count"],
+                    "Supporting": "Yes" if item["has_supporting_evidence"] else "No",
+                    "Error": item["error"],
+                }
+                for item in items
+            ]
+        )
+        st.dataframe(df, hide_index=True, use_container_width=True)
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Runs", summary.get("total_runs", 0))
+        col2.metric("Completed", summary.get("completed", 0))
+        col3.metric("Failed", summary.get("failed", 0))
+        col4.metric("Running", summary.get("running", 0))
 
 # Auto-refresh every 5 minutes
 st.caption("Auto-refreshes every 5 minutes")

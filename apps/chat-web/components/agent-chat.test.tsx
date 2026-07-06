@@ -12,6 +12,7 @@ vi.mock("@copilotkit/react-ui", () => ({
 
 import AgentChat from "./agent-chat";
 import { normalizeAnalysisTargetInput } from "./agent-chat";
+import { scrollToRelatedPanel } from "./agent-chat";
 import { shouldRequestTabData } from "./agent-chat";
 
 it("renders dashboard-first workspace", () => {
@@ -22,6 +23,8 @@ it("renders dashboard-first workspace", () => {
   expect(html).toContain("Source Trust");
   expect(html).toContain("Trust");
   expect(html).toContain("Run Scan");
+  expect(html).toContain("Send Daily Summary");
+  expect(html).not.toContain("Page Copilot");
 });
 
 it("prefers a specific event id over free-form tool filters", () => {
@@ -87,4 +90,16 @@ it("requests tab data when the panel is empty or previously failed", () => {
       hasError: true,
     })
   ).toBe(false);
+});
+
+it("scrolls the related panel into view with smooth alignment", () => {
+  const scrollIntoView = vi.fn();
+
+  scrollToRelatedPanel({ scrollIntoView } as unknown as HTMLDivElement);
+
+  expect(scrollIntoView).toHaveBeenCalledWith({
+    behavior: "smooth",
+    block: "start",
+    inline: "nearest",
+  });
 });

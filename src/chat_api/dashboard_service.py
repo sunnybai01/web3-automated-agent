@@ -165,3 +165,47 @@ def list_schedule_logs(limit: int = 50) -> dict:
         }
     finally:
         db.close()
+
+
+def list_investigations(limit: int = 50) -> dict:
+    from sqlalchemy import desc
+
+    from src.db.database import SessionLocal
+    from src.db.models import AgentMission
+
+    db = SessionLocal()
+    try:
+        missions = db.query(AgentMission).order_by(desc(AgentMission.started_at)).limit(limit).all()
+
+        items = []
+        for mission in missions:
+            conclusion = mission.conclusion or {}
+            similar_events = conclusion.get("similar_events") or []
+            supporting_evidence = conclusion.get("supporting_evidence") or None
+            items.append(
+                {
+                    "mission_id": mission.id,
+                    "event_id": mission.event_id,
+                    "status": mission.status or "unknown",
+                    "started": _format_dt(mission.started_at, "%m-%d %H:%M"),
+                    "finished": _format_dt(mission.finished_at, "%m-%d %H:%M"),
+                    "title": str(conclusion.get("title") or ""),
+                    "verdict": str(conclusion.get("verdict") or "unknown"),
+                    "recommended_action": str(conclusion.get("recommended_action") or ""),
+                    "similar_count": len(similar_events),
+                    "has_supporting_evidence": bool(supporting_evidence),
+                    "error": (mission.error_message or "")[:80],
+                }
+            )
+
+        return {
+            "summary": {
+                "total_runs": len(missions),
+                "completed": sum(1 for mission in missions if mission.status == "completed"),
+                "failed": sum(1 for mission in missions if mission.status == "failed"),
+                "running": sum(1 for mission in missions if mission.status == "running"),
+            },
+            "items": items,
+        }
+    finally:
+        db.close()

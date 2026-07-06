@@ -9,7 +9,7 @@ import {
   Sparkles,
   Telescope,
 } from "lucide-react";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import { runMixedModeVerification } from "../lib/actions";
@@ -19,10 +19,13 @@ import {
   getScheduleStatusMap,
   summarizeManualScan,
 } from "../lib/manual-scan";
+import { runInvestigation } from "../lib/investigation";
 import type {
   AnalysisTargetInput,
+  DailySummaryTriggerResponse,
   DashboardOpportunitiesResponse,
   DashboardOpportunityItem,
+  InvestigationResponse,
   DashboardScheduleLogsResponse,
   DashboardSourceHealthResponse,
   ManualScanStatusResponse,
@@ -33,6 +36,7 @@ import type {
   SelectTargetsResponse,
   VerifyResponse,
 } from "../types/chat";
+import CopilotDrawer from "./copilot-drawer";
 import ResultPanels from "./result-panels";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -78,6 +82,16 @@ export function shouldRequestTabData({
   hasError: boolean;
 }) {
   return !isLoading && (!hasData || hasError);
+}
+
+export function scrollToRelatedPanel(
+  element: HTMLDivElement | null | undefined
+) {
+  element?.scrollIntoView({
+    behavior: "smooth",
+    block: "start",
+    inline: "nearest",
+  });
 }
 
 const isoDatePattern = /^\d{4}-\d{2}-\d{2}(?:[T\s].*)?$/;
@@ -133,6 +147,7 @@ export function normalizeAnalysisTargetInput(
 }
 
 export default function AgentChat() {
+  const resultsSectionRef = useRef<HTMLDivElement | null>(null);
   const [activeTab, setActiveTab] = useState<DashboardTab>("opportunities");
   const [filters, setFilters] = useState<DashboardFilters>({
     eventTypes: ["grant", "hackathon", "bounty"],
@@ -159,12 +174,22 @@ export default function AgentChat() {
   const [isScheduleLogsLoading, setIsScheduleLogsLoading] = useState(false);
   const [selectedOpportunity, setSelectedOpportunity] =
     useState<DashboardOpportunityItem | null>(null);
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [result, setResult] = useState<MixedModeResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const [investigation, setInvestigation] =
+    useState<InvestigationResponse | null>(null);
+  const [isInvestigating, setIsInvestigating] = useState(false);
   const [manualScanStatus, setManualScanStatus] =
     useState<ManualScanStatusResponse | null>(null);
   const [manualScanError, setManualScanError] = useState<string | null>(null);
   const [isManualScanStarting, setIsManualScanStarting] = useState(false);
+  const [dailySummaryStatus, setDailySummaryStatus] =
+    useState<DailySummaryTriggerResponse | null>(null);
+  const [dailySummaryError, setDailySummaryError] = useState<string | null>(
+    null
+  );
+  const [isDailySummarySending, setIsDailySummarySending] = useState(false);
 
   const api = {
     selectTargets: async (
@@ -178,6 +203,10 @@ export default function AgentChat() {
       body: ProposeOptionsRequest
     ): Promise<ProposeOptionsResponse> =>
       postJson("/api/chat/propose-options", body),
+    investigate: async (body: {
+      event_id: number;
+    }): Promise<InvestigationResponse> =>
+      postJson("/api/chat/investigate", body),
   };
 
   const currentTarget = useMemo<AnalysisTargetInput>(
@@ -394,6 +423,25 @@ export default function AgentChat() {
     }
   }
 
+  async function triggerDailySummary() {
+    setIsDailySummarySending(true);
+    setDailySummaryError(null);
+
+    try {
+      const data = (await postJson(
+        "/api/dashboard/daily-summary",
+        {}
+      )) as DailySummaryTriggerResponse;
+      setDailySummaryStatus(data);
+    } catch (error) {
+      setDailySummaryError(
+        error instanceof Error ? error.message : "Failed to send daily summary."
+      );
+    } finally {
+      setIsDailySummarySending(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -483,6 +531,17 @@ export default function AgentChat() {
       return data;
     } finally {
       setIsRunning(false);
+    }
+  };
+
+  const investigateSelectedOpportunity = async (eventId: number) => {
+    setIsInvestigating(true);
+    try {
+      const data = await runInvestigation(api, eventId);
+      setInvestigation(data);
+      return data;
+    } finally {
+      setIsInvestigating(false);
     }
   };
 
@@ -643,24 +702,65 @@ export default function AgentChat() {
                     </CardDescription>
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    <Button
-                      disabled={
-                        isManualScanStarting ||
-                        manualScanStatus?.status === "running"
-                      }
-                      onClick={() => void triggerManualScan()}
-                    >
-                      {isManualScanStarting
-                        ? "Starting Scan..."
-                        : manualScanStatus?.status === "running"
-                          ? "Scan Running..."
-                          : "Run Scan"}
-                    </Button>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button
+                        disabled={
+                          isManualScanStarting ||
+                          manualScanStatus?.status === "running"
+                        }
+                        onClick={() => void triggerManualScan()}
+                      >
+                        {isManualScanStarting
+                          ? "Starting Scan..."
+                          : manualScanStatus?.status === "running"
+                            ? "Scan Running..."
+                            : "Run Scan"}
+                      </Button>
+                      <Button
+                        disabled={isDailySummarySending}
+                        variant="outline"
+                        onClick={() => void triggerDailySummary()}
+                      >
+                        {isDailySummarySending
+                          ? "Sending Summary..."
+                          : "Send Daily Summary"}
+                      </Button>
+                    </div>
                     <Badge variant="outline">{manualScanProgressLabel}</Badge>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-5">
+                {dailySummaryError ? (
+                  <EmptyState
+                    title="Daily summary send failed"
+                    description={dailySummaryError}
+                    icon={<Telescope className="h-5 w-5 text-primary" />}
+                  />
+                ) : dailySummaryStatus ? (
+                  <div className="rounded-2xl border border-border/70 bg-background/70 p-4 text-sm text-muted-foreground">
+                    <div className="flex flex-wrap items-center justify-between gap-3 text-foreground">
+                      <span className="font-medium">Daily Summary</span>
+                      <Badge variant="outline">
+                        {dailySummaryStatus.status}
+                      </Badge>
+                    </div>
+                    <p className="mt-2">
+                      Summary date: {dailySummaryStatus.summary_date || "-"}
+                    </p>
+                    {dailySummaryStatus.slack_ts ? (
+                      <p className="mt-1">
+                        Slack ts: {dailySummaryStatus.slack_ts}
+                      </p>
+                    ) : null}
+                    {dailySummaryStatus.error ? (
+                      <p className="mt-1 text-rose-700">
+                        Error: {dailySummaryStatus.error}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 {manualScanError ? (
                   <EmptyState
                     title="Manual scan status unavailable"
@@ -1006,6 +1106,7 @@ export default function AgentChat() {
                                 <th className="px-4 py-3">Heat</th>
                                 <th className="px-4 py-3">Trust</th>
                                 <th className="px-4 py-3">Verified</th>
+                                <th className="px-4 py-3">Actions</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-border bg-background/40">
@@ -1017,7 +1118,7 @@ export default function AgentChat() {
                                     key={item.id}
                                     className={
                                       isSelected
-                                        ? "bg-primary/8"
+                                        ? "bg-primary/8 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.18)]"
                                         : "hover:bg-accent/50"
                                     }
                                   >
@@ -1057,6 +1158,25 @@ export default function AgentChat() {
                                     </td>
                                     <td className="px-4 py-3 text-muted-foreground">
                                       {item.verified ? "✅" : "⚠️"}
+                                    </td>
+                                    <td className="px-4 py-3 text-muted-foreground">
+                                      <Button
+                                        variant={
+                                          isSelected ? "default" : "outline"
+                                        }
+                                        className="rounded-full"
+                                        onClick={() => {
+                                          setSelectedOpportunity(item);
+                                          setIsCopilotOpen(true);
+                                          window.requestAnimationFrame(() => {
+                                            scrollToRelatedPanel(
+                                              resultsSectionRef.current
+                                            );
+                                          });
+                                        }}
+                                      >
+                                        Ask Copilot
+                                      </Button>
                                     </td>
                                   </tr>
                                 );
@@ -1125,6 +1245,19 @@ export default function AgentChat() {
                                   {isRunning
                                     ? "Analyzing..."
                                     : "Analyze Selected Opportunity"}
+                                </Button>
+                                <Button
+                                  disabled={isInvestigating}
+                                  variant="outline"
+                                  onClick={() =>
+                                    void investigateSelectedOpportunity(
+                                      selectedOpportunity.id
+                                    )
+                                  }
+                                >
+                                  {isInvestigating
+                                    ? "Investigating..."
+                                    : "Run Investigation"}
                                 </Button>
                                 {selectedOpportunity.apply_url ? (
                                   <a
@@ -1356,59 +1489,21 @@ export default function AgentChat() {
             </Card>
           </div>
 
-          <div className="space-y-6 2xl:sticky 2xl:top-6 2xl:self-start">
-            <Card className="border-border/70 bg-card/95 shadow-sm">
-              <CardHeader>
-                <CardTitle>Page Copilot</CardTitle>
-                <CardDescription>
-                  Use the selected opportunity and the currently visible dataset
-                  as the basis for AI follow-up.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {selectedOpportunity ? (
-                  <div className="rounded-2xl border border-border/70 bg-background/70 p-4 text-sm">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="font-medium text-foreground">
-                        Current selection
-                      </span>
-                      <Badge variant="outline">#{selectedOpportunity.id}</Badge>
-                    </div>
-                    <p className="mt-2 text-foreground">
-                      {selectedOpportunity.title}
-                    </p>
-                    <p className="mt-1 text-muted-foreground">
-                      {selectedOpportunity.type} ·{" "}
-                      {selectedOpportunity.ecosystem ?? "-"} · score{" "}
-                      {selectedOpportunity.score ?? "-"}
-                    </p>
-                  </div>
-                ) : (
-                  <EmptyState
-                    title="No selected opportunity"
-                    description="Pick a row from the opportunities table to anchor the agent."
-                  />
-                )}
-
-                <div className="h-[620px] overflow-hidden rounded-3xl border border-border/70 bg-background/80 lg:h-[680px] 2xl:h-[720px]">
-                  <CopilotChat
-                    className="h-full"
-                    labels={{
-                      title: "Signal Room Copilot",
-                      initial:
-                        "Ask about the currently visible opportunities, or request a deep analysis of the selected row.",
-                      placeholder:
-                        "Example: Summarize why the selected opportunity is worth prioritizing.",
-                    }}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <ResultPanels data={result} isRunning={isRunning} />
+          <div ref={resultsSectionRef}>
+            <ResultPanels
+              data={result}
+              investigation={investigation}
+              isRunning={isRunning}
+              isInvestigating={isInvestigating}
+            />
           </div>
         </div>
       </div>
+      <CopilotDrawer
+        open={isCopilotOpen}
+        opportunity={selectedOpportunity}
+        onClose={() => setIsCopilotOpen(false)}
+      />
     </main>
   );
 }
