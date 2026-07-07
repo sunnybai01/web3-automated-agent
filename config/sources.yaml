@@ -381,11 +381,11 @@ sources:
     source_tier: discovery
     signal_type: discovery
     official: false
-    query: "new web3 blockchain grant program now accepting applications"
+    query: '(site:gov.gitcoin.co OR site:gitcoin.co OR site:questbook.xyz OR site:retro9000.avax.network OR site:build.avax.network OR site:sui.io OR site:base.org) (grant OR grants OR rfp OR "builder program") ("apply now" OR "applications open" OR "grant portal" OR "request for proposals") -ambassador -hackathon -scholarship -fellowship -venture -series -valuation'
     max_results: 5
     search_depth: advanced
     topic: news
-    days: 14
+    days: 15
     enabled: true
 
   - name: tavily_hackathons_discovery
@@ -399,11 +399,11 @@ sources:
     source_tier: discovery
     signal_type: discovery
     official: false
-    query: "upcoming web3 crypto hackathon registration open 2026 prize pool"
+    query: '(site:ethglobal.com OR site:dorahacks.io OR site:devpost.com OR site:taikai.network OR site:build.avax.network) (web3 OR crypto) (hackathon OR buildathon) ("registration open" OR "register now" OR "apply now" OR "prize pool") -recap -winner -highlights'
     max_results: 5
     search_depth: advanced
     topic: news
-    days: 14
+    days: 15
     enabled: true
 
   # =========================================================================
@@ -490,11 +490,11 @@ sources:
     category: bounty
     ecosystem: multi
     fetch_method: tavily_search
-    query: "new web3 crypto bounties open for contributors this week"
+    query: '(site:immunefi.com OR site:code4rena.com OR site:sherlock.xyz OR site:cantina.xyz OR site:layer3.xyz OR site:onlydust.com OR site:dework.xyz) (web3 OR crypto) (bounty OR "bug bounty" OR "security bounty") (open OR "apply now") -grant -"funding round"'
     max_results: 5
     search_depth: advanced
     topic: news
-    days: 7
+    days: 15
     enabled: true
 
   - name: superteamdao
@@ -504,7 +504,7 @@ sources:
     category: bounty
     ecosystem: solana
     fetch_method: tavily_search
-    query: "Solana Superteam Earn bounties open listings"
+    query: "(site:superteam.fun OR site:earn.superteam.fun) (Solana OR Superteam) (bounty OR bounties) (open OR apply)"
     max_results: 5
     search_depth: advanced
     topic: general

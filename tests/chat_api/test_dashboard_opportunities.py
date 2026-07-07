@@ -12,7 +12,7 @@ def test_dashboard_opportunities_returns_metrics_and_items(monkeypatch) -> None:
     client = TestClient(app)
 
     def fake_list_opportunities(filters):
-        assert filters["days"] == 14
+        assert filters["days"] == 15
         assert filters["min_score"] == 5.0
         assert filters["source_trust"] == "official"
         return {
@@ -52,7 +52,7 @@ def test_dashboard_opportunities_returns_metrics_and_items(monkeypatch) -> None:
             "event_types": ["grant", "hackathon", "bounty"],
             "ecosystem": "",
             "min_score": 5.0,
-            "days": 14,
+            "days": 15,
             "source_trust": "official",
         },
     )

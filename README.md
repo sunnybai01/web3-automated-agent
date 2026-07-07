@@ -33,19 +33,42 @@
 - `reports/`：运行生成的 Markdown 报告
 - `.vscode/sessions.json`：预置运维终端命令
 
-## 3. 运行架构
+## 3. 机会信息获取流程
+
+当前机会抓取由 `grant_hackathon`、`bounty`、`social_watch` 三类 schedule 触发，统一进入 `run_pipeline()` 主链路。
 
 ```mermaid
-flowchart LR
-  A[Sources\nRSS/GitHub/Web/Tavily] --> B[Fetchers]
-  B --> C[L1 URL Dedup]
-  C --> D[L2 Semantic Dedup\nChromaDB]
-  D --> E[Classifier\nKeyword + LLM]
-  E --> F[Verifier]
-  F --> G[Scorer]
-  G --> H[PostgreSQL]
-  G --> I[Slack Dispatcher]
-  G --> J[Report Writer]
+flowchart TD
+  A[APScheduler 触发任务\ngrant_hackathon / bounty / social_watch] --> B[run_pipeline schedule]
+  B --> C[加载 source 配置\nconfig/sources.yaml\n+ approved chains.candidates.yaml]
+  C --> D[build_registry\n按 fetch_method 注册 Fetcher]
+  D --> E[抓取前裁剪\n按 schedule 过滤 source\nTavily budget 选择\n冷却/失败 source 跳过]
+  E --> F[并行遍历可用 source\nRSS / GitHub Search / Web Scraper / Tavily / Twitter]
+  F --> G[fetch_all_with_status\n返回 items + source_status]
+  G --> H[更新 source_health\n记录成功/失败/跳过]
+  H --> I[L1 URL 去重\ncanonical_url 检查\n写入 raw_signals]
+  I --> J{是否为新链接}
+  J -->|否| K[丢弃重复项]
+  J -->|是| L[关键词粗筛\nKeywordFilter]
+  L --> M[LLM 分类与结构化抽取\nGRANT / HACKATHON / BOUNTY / NOISE]
+  M --> N{是否为有效机会}
+  N -->|否| O[丢弃噪音]
+  N -->|是| P[时效过滤\n发布时间超过 7 天\n或 deadline 已过则跳过]
+  P --> Q[L2 语义去重\nChromaDB 相似度匹配\n15 天窗口]
+  Q --> R{是否为新事件}
+  R -->|否| S[合并为已有事件\n追加 event_source\nheat_count +1]
+  R -->|是| T[零信任验证\norigin anchor\ncross-reference\nsecurity API]
+  T --> U{是否判定 fraud}
+  U -->|是| V[标记欺诈并终止]
+  U -->|否| W[机会评分\nROI / Reputation / Timeliness / Strategy]
+  W --> X[更新 PostgreSQL Event]
+  X --> Y[推送 Slack 卡片\n若配置可用]
+  Y --> Z[汇总 new_events]
+  Z --> AA{本轮是否有有效机会}
+  AA -->|否| AB[结束本轮\n仅记录 schedule log]
+  AA -->|是| AC[生成 Markdown 报告]
+  AC --> AD[上传 Slack 报告附件]
+  AD --> AE[写入 schedule log\n结束本轮]
 ```
 
 ## 4. 先决条件

@@ -28,7 +28,7 @@ class TavilyFetcher(BaseFetcher):
         max_results:  number of results to return (default 5)
         search_depth: "basic" | "advanced" (default "advanced")
         topic:        "general" | "news" (default "general")
-        days:         when topic == "news", limit to the last N days (default 7)
+        days:         when topic == "news", limit to the last N days (default 15)
     """
 
     source_type = "tavily_search"
@@ -62,7 +62,7 @@ class TavilyFetcher(BaseFetcher):
             "topic": topic,
         }
         if topic == "news":
-            search_kwargs["days"] = int(self.config.get("days", 7))
+            search_kwargs["days"] = int(self.config.get("days", 15))
 
         try:
             response = client.search(**search_kwargs)

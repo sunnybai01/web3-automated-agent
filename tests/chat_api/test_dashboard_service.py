@@ -114,7 +114,7 @@ def test_list_opportunities_filters_to_official_trust(monkeypatch) -> None:
             "event_types": ["grant", "hackathon", "bounty"],
             "ecosystem": "",
             "min_score": 5.0,
-            "days": 14,
+            "days": 15,
             "source_trust": "official",
         }
     )

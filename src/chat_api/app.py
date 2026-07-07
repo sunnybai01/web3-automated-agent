@@ -37,7 +37,7 @@ def dashboard_opportunities(
     event_types: list[str] = Query(default=["grant", "hackathon", "bounty"]),
     ecosystem: str = "",
     min_score: float = 5.0,
-    days: int = 14,
+    days: int = 15,
     source_trust: str = "all",
 ) -> DashboardOpportunitiesResponse:
     from . import dashboard_service

@@ -1,4 +1,4 @@
-"""L2 semantic deduplication — ChromaDB vector similarity + 14-day sliding window."""
+"""L2 semantic deduplication — ChromaDB vector similarity + 15-day sliding window."""
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Tuple
@@ -18,15 +18,15 @@ class ContentDeduplicator:
 
     For each candidate event:
     1. Compute embedding of its text (title + description)
-    2. Search ChromaDB for similar events within the 14-day window
+    2. Search ChromaDB for similar events within the 15-day window
     3. If cosine similarity > threshold: it's a duplicate — just add a source link
     4. Otherwise: it's new — index and return
     """
 
     def __init__(self, vector_store: VectorStore):
         self.vs = vector_store
-        self.threshold = settings.SIMILARITY_THRESHOLD  # default: 0.85
-        self.window_days = settings.SLIDING_WINDOW_DAYS  # default: 14
+        self.threshold = settings.SIMILARITY_THRESHOLD  # default: 0.65
+        self.window_days = settings.SLIDING_WINDOW_DAYS  # default: 15
 
     def check_and_process(
         self,
