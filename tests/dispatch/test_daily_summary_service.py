@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from src.db.database import Base
-from src.db.models import Event, EventSource, ScheduleLog
+from src.db.models import Event, EventSource, PushLog, ScheduleLog
 from src.dispatch.daily_summary_service import build_daily_summary
 
 
@@ -16,7 +16,7 @@ def _db_session():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(
         bind=engine,
-        tables=[Event.__table__, EventSource.__table__, ScheduleLog.__table__],
+        tables=[Event.__table__, EventSource.__table__, PushLog.__table__, ScheduleLog.__table__],
     )
     return sessionmaker(autocommit=False, autoflush=False, bind=engine)()
 
@@ -92,6 +92,8 @@ def test_build_daily_summary_includes_totals_and_new_event_sources() -> None:
         assert payload["new_events_count"] == 1
         assert payload["new_event_sources"] == ["twitter_buildonbase"]
         assert payload["new_events"][0]["title"] == "Base Builder Rewards"
+        assert payload["new_events"][0]["source_type"] == "twitter"
+        assert payload["new_events"][0]["source_url"] == "https://x.com/buildonbase/status/1"
     finally:
         db.close()
 

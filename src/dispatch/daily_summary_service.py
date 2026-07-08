@@ -61,10 +61,14 @@ def build_daily_summary(db: Session, *, summary_date: dt.date) -> dict:
         event_sources = (
             db.query(EventSource)
             .filter(EventSource.event_id.in_(event_ids))
+            .order_by(EventSource.event_id.asc(), EventSource.fetched_at.asc(), EventSource.id.asc())
             .all()
         )
 
     source_names = sorted({source.source_name for source in event_sources if source.source_name})
+    primary_sources_by_event_id = {}
+    for source in event_sources:
+        primary_sources_by_event_id.setdefault(source.event_id, source)
 
     return {
         "summary_date": summary_date.isoformat(),
@@ -79,6 +83,19 @@ def build_daily_summary(db: Session, *, summary_date: dt.date) -> dict:
                 "ecosystem": event.ecosystem,
                 "final_score": event.final_score,
                 "status": event.status,
+                "source_type": (
+                    primary_sources_by_event_id[event.id].source_type
+                    if event.id in primary_sources_by_event_id else ""
+                ),
+                "source_name": (
+                    primary_sources_by_event_id[event.id].source_name
+                    if event.id in primary_sources_by_event_id else ""
+                ),
+                "source_url": (
+                    primary_sources_by_event_id[event.id].source_url or event.source_url or ""
+                    if event.id in primary_sources_by_event_id else (event.source_url or "")
+                ),
+                "application_url": event.application_url,
             }
             for event in events
         ],

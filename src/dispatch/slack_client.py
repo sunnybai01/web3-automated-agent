@@ -23,12 +23,30 @@ COLOR_MAP = {
     "BOUNTY": "#36C5F0",    # blue
 }
 
+SOURCE_TYPE_LABELS = {
+    "twitter": "Twitter",
+    "tavily_search": "Tavily",
+}
+
 
 def _format_event_type(event_type: str) -> str:
     normalized = (event_type or "other").strip().upper()
     if normalized in {"GRANT", "HACKATHON", "BOUNTY"}:
         return normalized.title()
     return "Other"
+
+
+def _format_source_type(source_type: str) -> str:
+    normalized = (source_type or "").strip().lower()
+    if not normalized:
+        return "Unknown"
+    return SOURCE_TYPE_LABELS.get(normalized, normalized.replace("_", " ").title())
+
+
+def _format_slack_link(url: str, label: str) -> str:
+    if not url:
+        return ""
+    return f"<{url}|{label}>"
 
 
 class SlackDispatcher:
@@ -77,6 +95,7 @@ class SlackDispatcher:
         verification = str(event.get("verification_verdict") or "unknown").title()
         app_url = event.get("application_url", "")
         source_url = event.get("source_url", app_url)
+        source_type = _format_source_type(str(event.get("source_type") or ""))
         header_url = source_url or app_url or "https://slack.com"
 
         # Use a single-column fields block (one field only) to avoid two-column layout.
@@ -87,6 +106,7 @@ class SlackDispatcher:
             f"*Deadline:* {deadline}",
             f"*Ecosystem:* {ecosystem}",
             f"*Track:* {track}",
+            f"*Source type:* {source_type}",
             f"*Source trust:* {source_trust}",
             f"*Verification:* {verification}",
             f"*Heat:* {event.get('heat_count', 1)} source(s)",
@@ -239,8 +259,15 @@ class SlackDispatcher:
             lines.append(f"New qualified opportunities: {len(new_events)}")
             lines.append(f"Sources: {', '.join(source_names)}")
             for event in new_events[:10]:
+                title = event.get("title", "Untitled")
+                source_type = _format_source_type(str(event.get("source_type") or ""))
+                source_url = event.get("source_url") or event.get("application_url") or ""
+                title_text = _format_slack_link(source_url, title) if source_url else title
+                source_suffix = ""
+                if source_type != "Unknown":
+                    source_suffix = f" | Source: {source_type}"
                 lines.append(
-                    f"- [{str(event.get('event_type') or 'other').upper()}] {event.get('title', 'Untitled')}"
+                    f"- [{str(event.get('event_type') or 'other').upper()}] {title_text}{source_suffix}"
                 )
         else:
             lines.append("No new qualified opportunities today.")

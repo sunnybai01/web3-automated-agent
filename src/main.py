@@ -250,6 +250,7 @@ def run_pipeline(schedule: str):
                 "ecosystem": structured.get("ecosystem"),
                 "application_url": structured.get("application_url"),
                 "source_url": item.raw_url,
+                "source_type": item.source_type,
                 "source_platform": structured.get("source_platform") or item.source_name,
                 **source_metadata,
             }
