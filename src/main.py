@@ -25,7 +25,6 @@ from src.dispatch.daily_summary_service import build_daily_summary
 from src.dispatch.report_writer import generate_report
 from src.dispatch.heartbeat import heartbeat, increment_stat, reset_daily_stats
 from src.scheduler.jobs import create_scheduler, register_jobs
-from scripts.sync_defillama_chains import sync_candidate_snapshot
 from src.db.queries import (
     upsert_source_health,
     get_source_health,
@@ -57,6 +56,7 @@ _scorer = None
 _slack = None
 _stats_reset_day = datetime.now(timezone.utc).day
 STALE_EVENT_MAX_AGE = timedelta(days=7)
+REQUIRED_TIME_WINDOW_FIELDS = ("start_date", "deadline")
 
 EVENT_MODEL_FIELDS = {
     "event_type",
@@ -133,12 +133,20 @@ def _published_at(item) -> datetime | None:
 
 def _staleness_reason(item, structured: dict | None, now: datetime | None = None) -> str | None:
     now = now or datetime.now(timezone.utc)
+    structured = structured or {}
 
     published_at = _published_at(item)
+    if published_at is None:
+        return "missing_published_at"
+
+    for field_name in REQUIRED_TIME_WINDOW_FIELDS:
+        if _parse_datetime(structured.get(field_name)) is None:
+            return f"missing_{field_name}"
+
     if published_at is not None and now - published_at > STALE_EVENT_MAX_AGE:
         return "published_too_old"
 
-    deadline = _parse_datetime((structured or {}).get("deadline"))
+    deadline = _parse_datetime(structured.get("deadline"))
     if deadline is not None and deadline < now:
         return "deadline_expired"
 
@@ -149,7 +157,7 @@ def _staleness_reason(item, structured: dict | None, now: datetime | None = None
 # Pipeline runner
 # ---------------------------------------------------------------------------
 def run_pipeline(schedule: str):
-    """Run the full pipeline for one schedule type (grant_hackathon | bounty)."""
+    """Run the full pipeline for one schedule type."""
     global _stats_reset_day
 
     _init_components()
@@ -370,15 +378,6 @@ def run_heartbeat():
     heartbeat(_hb_slack)
 
 
-def run_defillama_candidate_sync():
-    """Refresh the DefiLlama candidate chain snapshot on schedule."""
-    snapshot = sync_candidate_snapshot()
-    logger.info(
-        "DefiLlama candidate sync complete: %s chains",
-        len(snapshot.get("candidate_chains", [])),
-    )
-
-
 def run_social_watch():
     """Run the dedicated social watch schedule."""
     return run_pipeline("social_watch")
@@ -392,10 +391,6 @@ def run_daily_summary():
     try:
         summary_date = datetime.now(ZoneInfo("Asia/Shanghai")).date()
         existing = get_daily_summary_log(db, summary_date=summary_date, channel="slack")
-        if existing is not None and existing.status == "success":
-            logger.info("Daily summary already sent for %s; skipping", summary_date.isoformat())
-            return {"status": "skipped", "summary_date": summary_date.isoformat()}
-
         log_row = existing or create_daily_summary_log(db, summary_date=summary_date, channel="slack")
         payload = build_daily_summary(db, summary_date=summary_date)
         payload["totals"]["pushed"] = payload["totals"].get("pushed", 0)
@@ -428,7 +423,7 @@ def main():
 
     # Create scheduler
     scheduler = create_scheduler()
-    register_jobs(scheduler, run_pipeline, run_heartbeat, run_defillama_candidate_sync, run_social_watch, run_daily_summary)
+    register_jobs(scheduler, run_pipeline, run_heartbeat, run_social_watch, run_daily_summary)
     scheduler.start()
     logger.info("Scheduler started — waiting for jobs...")
 
@@ -447,7 +442,6 @@ def main():
         # Run once immediately on startup, then wait for cron
         logger.info("Running initial pipeline pass...")
         run_pipeline("grant_hackathon")
-        run_pipeline("bounty")
         run_social_watch()
         run_heartbeat()
 

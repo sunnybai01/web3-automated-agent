@@ -22,6 +22,7 @@ FETCHER_MAP = {
 }
 
 DISCOVERY_FETCH_METHODS = {"github_search", "tavily_search"}
+DISABLED_SCHEDULES = {"bounty"}
 
 
 def _resolve_fetcher_class(fetch_method: str):
@@ -88,98 +89,14 @@ def _load_yaml_config(path: str | Path) -> dict:
         return yaml.safe_load(f) or {}
 
 
-def load_chain_candidates_config(path: str = None) -> dict:
-    if path is None:
-        path = _repo_config_path("chains.candidates.yaml")
-
-    candidate_path = Path(path)
-    if not candidate_path.exists():
-        return {"candidate_chains": []}
-
-    config = _load_yaml_config(candidate_path)
-    if "candidate_chains" not in config:
-        raise ValueError("chain candidates config must contain 'candidate_chains'")
-
-    return config
-
-
-def _is_enabled_candidate_chain(chain: dict) -> bool:
-    return bool(chain.get("enabled")) and str(chain.get("review_status", "")).lower() == "approved"
-
-
-def _build_candidate_query(chain_name: str, schedule: str) -> str:
-    if schedule == "bounty":
-        return (
-            f'"{chain_name}" (web3 OR blockchain OR crypto) '
-            '(bounty OR bug bounty OR security bounty OR developer bounty)'
-        )
-
-    return (
-        f'"{chain_name}" (web3 OR blockchain OR crypto) '
-        '(grant OR grants OR hackathon OR accelerator OR funding)'
-    )
-
-
-def _build_candidate_sources(chain: dict) -> list[dict]:
-    chain_id = chain.get("chain_id")
-    chain_name = chain.get("name") or chain.get("defillama_name") or chain_id
-
-    if not chain_id or not chain_name:
-        return []
-
+def _exclude_disabled_schedules(sources: list[dict]) -> list[dict]:
     return [
-        {
-            "name": f"defillama_{chain_id}_grant_hackathon",
-            "type": "tavily_search",
-            "fetch_method": "tavily_search",
-            "schedule": "grant_hackathon",
-            "category": "grant",
-            "ecosystem": chain_id,
-            "chain": chain_id,
-            "source_tier": "discovery",
-            "signal_type": "discovery",
-            "official": False,
-            "enabled": True,
-            "max_results": 5,
-            "search_depth": "advanced",
-            "topic": "news",
-            "days": 30,
-            "query": _build_candidate_query(chain_name, "grant_hackathon"),
-        },
-        {
-            "name": f"defillama_{chain_id}_bounty",
-            "type": "tavily_search",
-            "fetch_method": "tavily_search",
-            "schedule": "bounty",
-            "category": "bounty",
-            "ecosystem": chain_id,
-            "chain": chain_id,
-            "source_tier": "discovery",
-            "signal_type": "discovery",
-            "official": False,
-            "enabled": True,
-            "max_results": 5,
-            "search_depth": "advanced",
-            "topic": "news",
-            "days": 30,
-            "query": _build_candidate_query(chain_name, "bounty"),
-        },
+        source for source in sources
+        if source.get("schedule") not in DISABLED_SCHEDULES
     ]
 
 
-def _expand_candidate_chain_sources(path: str = None) -> list[dict]:
-    config = load_chain_candidates_config(path)
-    sources = []
-
-    for chain in config.get("candidate_chains", []):
-        if not _is_enabled_candidate_chain(chain):
-            continue
-        sources.extend(_build_candidate_sources(chain))
-
-    return sources
-
-
-def load_sources_config(path: str = None, chain_candidates_path: str = None) -> dict:
+def load_sources_config(path: str = None) -> dict:
     if path is None:
         path = _repo_config_path("sources.yaml")
     config = _load_yaml_config(path)
@@ -187,13 +104,10 @@ def load_sources_config(path: str = None, chain_candidates_path: str = None) -> 
     if "sources" not in config:
         raise ValueError("sources config must contain 'sources'")
 
-    configured_sources = [_normalize_source_metadata(source) for source in config["sources"]]
-    candidate_sources = [
+    config["sources"] = [
         _normalize_source_metadata(source)
-        for source in _expand_candidate_chain_sources(chain_candidates_path)
+        for source in _exclude_disabled_schedules(config["sources"])
     ]
-
-    config["sources"] = configured_sources + candidate_sources
 
     return config
 

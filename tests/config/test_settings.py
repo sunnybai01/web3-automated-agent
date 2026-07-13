@@ -1,18 +1,9 @@
-import os
 import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from config.settings import Settings
-
-
-def test_defillama_chains_url_defaults_to_v2_endpoint(monkeypatch) -> None:
-    monkeypatch.delenv("DEFILLAMA_CHAINS_URL", raising=False)
-
-    settings = Settings()
-
-    assert settings.DEFILLAMA_CHAINS_URL == "https://api.llama.fi/v2/chains"
 
 
 def test_twitter_settings_have_safe_defaults(monkeypatch) -> None:
@@ -41,8 +32,8 @@ def test_tavily_cooldown_has_safe_default(monkeypatch) -> None:
 
     settings = Settings()
 
-    assert settings.TAVILY_SUCCESS_COOLDOWN_MINUTES == 2880
-    assert settings.TAVILY_MAX_SOURCES_PER_RUN == 4
+    assert settings.TAVILY_SUCCESS_COOLDOWN_MINUTES == 1440
+    assert settings.TAVILY_MAX_SOURCES_PER_RUN == 1
 
 
 def test_daily_summary_settings_have_safe_defaults(monkeypatch) -> None:

@@ -1,4 +1,4 @@
-"""APScheduler job definitions — split frequency for Grant/Hackathon vs Bounty."""
+"""APScheduler job definitions for grant, hackathon, and social watch pipelines."""
 import logging
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -10,10 +10,8 @@ from config.settings import settings
 logger = logging.getLogger(__name__)
 
 # Schedule definitions
-GRANT_HACKATHON_SCHEDULE = "0 9,21 * * *"   # 09:00, 21:00 daily
-BOUNTY_SCHEDULE = "0 */2 * * *"              # every 2 hours
+GRANT_HACKATHON_SCHEDULE = "0 9 * * *"   # 09:00 daily
 HEARTBEAT_SCHEDULE = f"*/{settings.HEARTBEAT_INTERVAL_MINUTES} * * * *"
-DEFILLAMA_SYNC_SCHEDULE = settings.DEFILLAMA_SYNC_CRON
 DAILY_SUMMARY_SCHEDULE = settings.DAILY_SUMMARY_CRON
 SOCIAL_WATCH_INTERVAL_MINUTES = max(1, int(settings.SOCIAL_WATCH_INTERVAL_MINUTES))
 
@@ -34,30 +32,22 @@ def create_scheduler() -> BackgroundScheduler:
     return scheduler
 
 
-def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, defillama_sync_fn, social_watch_fn, daily_summary_fn):
+def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, social_watch_fn, daily_summary_fn):
     """Register all scheduled jobs on the given scheduler.
 
     Args:
         scheduler: APScheduler instance
         pipeline_fn: callable(schedule_name) that runs the full fetch→push pipeline
         heartbeat_fn: callable() that sends heartbeat + checks source health
-        defillama_sync_fn: callable() that refreshes DefiLlama candidate chains
+        social_watch_fn: callable() that runs the social watch pipeline
+        daily_summary_fn: callable() that builds and sends the daily summary
     """
-    # Grant + Hackathon — twice daily
+    # Grant + Hackathon — once daily
     scheduler.add_job(
         lambda: pipeline_fn("grant_hackathon"),
         trigger=CronTrigger.from_crontab(GRANT_HACKATHON_SCHEDULE, timezone="Asia/Shanghai"),
         id="pipeline_grant_hackathon",
         name="Grant & Hackathon Pipeline",
-        replace_existing=True,
-    )
-
-    # Bounty — every 2 hours
-    scheduler.add_job(
-        lambda: pipeline_fn("bounty"),
-        trigger=CronTrigger.from_crontab(BOUNTY_SCHEDULE, timezone="Asia/Shanghai"),
-        id="pipeline_bounty",
-        name="Bounty Pipeline",
         replace_existing=True,
     )
 
@@ -79,15 +69,6 @@ def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, def
         replace_existing=True,
     )
 
-    if settings.DEFILLAMA_SYNC_ENABLED:
-        scheduler.add_job(
-            defillama_sync_fn,
-            trigger=CronTrigger.from_crontab(DEFILLAMA_SYNC_SCHEDULE, timezone="Asia/Shanghai"),
-            id="defillama_candidate_sync",
-            name="DefiLlama Candidate Sync",
-            replace_existing=True,
-        )
-
     if settings.DAILY_SUMMARY_ENABLED:
         scheduler.add_job(
             daily_summary_fn,
@@ -99,8 +80,7 @@ def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, def
 
     logger.info(
         f"Registered jobs: grant_hackathon({GRANT_HACKATHON_SCHEDULE}), "
-        f"bounty({BOUNTY_SCHEDULE}), heartbeat({HEARTBEAT_SCHEDULE}), "
+        f"heartbeat({HEARTBEAT_SCHEDULE}), "
         f"social_watch({settings.SOCIAL_WATCH_INTERVAL_MINUTES}m), "
-        f"defillama_sync({'disabled' if not settings.DEFILLAMA_SYNC_ENABLED else DEFILLAMA_SYNC_SCHEDULE}), "
         f"daily_summary({'disabled' if not settings.DAILY_SUMMARY_ENABLED else DAILY_SUMMARY_SCHEDULE})"
     )

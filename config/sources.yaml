@@ -497,6 +497,223 @@ sources:
     days: 15
     enabled: true
 
+  # ----- Tavily per-chain discovery (migrated from Defillama dynamic sources) -----
+  - name: tavily_ethereum_grants
+    type: tavily_search
+    url: ""
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: ethereum
+    chain: ethereum
+    fetch_method: tavily_search
+    source_tier: discovery
+    signal_type: discovery
+    official: false
+    query: '"Ethereum" (web3 OR blockchain OR crypto) (grant OR grants OR hackathon OR accelerator OR funding)'
+    max_results: 5
+    search_depth: advanced
+    topic: news
+    days: 15
+    enabled: true
+
+  - name: tavily_solana_grants
+    type: tavily_search
+    url: ""
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: solana
+    chain: solana
+    fetch_method: tavily_search
+    source_tier: discovery
+    signal_type: discovery
+    official: false
+    query: '"Solana" (web3 OR blockchain OR crypto) (grant OR grants OR hackathon OR accelerator OR funding)'
+    max_results: 5
+    search_depth: advanced
+    topic: news
+    days: 15
+    enabled: true
+
+  - name: tavily_base_grants
+    type: tavily_search
+    url: ""
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: base
+    chain: base
+    fetch_method: tavily_search
+    source_tier: discovery
+    signal_type: discovery
+    official: false
+    query: '"Base" blockchain (grant OR grants OR hackathon OR builder program OR funding)'
+    max_results: 5
+    search_depth: advanced
+    topic: news
+    days: 15
+    enabled: true
+
+  - name: tavily_arbitrum_grants
+    type: tavily_search
+    url: ""
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: arbitrum
+    chain: arbitrum
+    fetch_method: tavily_search
+    source_tier: discovery
+    signal_type: discovery
+    official: false
+    query: '"Arbitrum" (web3 OR blockchain OR crypto) (grant OR grants OR hackathon OR accelerator OR funding)'
+    max_results: 5
+    search_depth: advanced
+    topic: news
+    days: 15
+    enabled: true
+
+  - name: tavily_polygon_grants
+    type: tavily_search
+    url: ""
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: polygon
+    chain: polygon
+    fetch_method: tavily_search
+    source_tier: discovery
+    signal_type: discovery
+    official: false
+    query: '"Polygon" (web3 OR blockchain OR crypto) (grant OR grants OR hackathon OR accelerator OR funding)'
+    max_results: 5
+    search_depth: advanced
+    topic: news
+    days: 15
+    enabled: true
+
+  - name: tavily_avalanche_grants
+    type: tavily_search
+    url: ""
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: avalanche
+    chain: avalanche
+    fetch_method: tavily_search
+    source_tier: discovery
+    signal_type: discovery
+    official: false
+    query: '"Avalanche" AVAX (web3 OR blockchain OR crypto) (grant OR grants OR hackathon OR accelerator OR funding)'
+    max_results: 5
+    search_depth: advanced
+    topic: news
+    days: 15
+    enabled: true
+
+  - name: tavily_sui_grants
+    type: tavily_search
+    url: ""
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: sui
+    chain: sui
+    fetch_method: tavily_search
+    source_tier: discovery
+    signal_type: discovery
+    official: false
+    query: '"Sui" blockchain (grant OR grants OR hackathon OR builder program OR funding)'
+    max_results: 5
+    search_depth: advanced
+    topic: news
+    days: 15
+    enabled: true
+
+  - name: tavily_monad_grants
+    type: tavily_search
+    url: ""
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: monad
+    chain: monad
+    fetch_method: tavily_search
+    source_tier: discovery
+    signal_type: discovery
+    official: false
+    query: '"Monad" blockchain (grant OR grants OR hackathon OR builder program OR funding)'
+    max_results: 5
+    search_depth: advanced
+    topic: news
+    days: 15
+    enabled: true
+
+  - name: tavily_stellar_grants
+    type: tavily_search
+    url: ""
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: stellar
+    chain: stellar
+    fetch_method: tavily_search
+    source_tier: discovery
+    signal_type: discovery
+    official: false
+    query: '"Stellar" blockchain (grant OR grants OR hackathon OR SCF OR funding)'
+    max_results: 5
+    search_depth: advanced
+    topic: news
+    days: 15
+    enabled: true
+
+  - name: tavily_starknet_grants
+    type: tavily_search
+    url: ""
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: starknet
+    chain: starknet
+    fetch_method: tavily_search
+    source_tier: discovery
+    signal_type: discovery
+    official: false
+    query: '"StarkNet" OR "Starknet" (web3 OR blockchain OR crypto) (grant OR grants OR hackathon OR accelerator OR funding)'
+    max_results: 5
+    search_depth: advanced
+    topic: news
+    days: 15
+    enabled: true
+
+  - name: tavily_near_grants
+    type: tavily_search
+    url: ""
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: near
+    chain: near
+    fetch_method: tavily_search
+    source_tier: discovery
+    signal_type: discovery
+    official: false
+    query: '"NEAR Protocol" OR "NEAR blockchain" (grant OR grants OR hackathon OR accelerator OR funding)'
+    max_results: 5
+    search_depth: advanced
+    topic: news
+    days: 15
+    enabled: true
+
+  - name: tavily_aptos_grants
+    type: tavily_search
+    url: ""
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: aptos
+    chain: aptos
+    fetch_method: tavily_search
+    source_tier: discovery
+    signal_type: discovery
+    official: false
+    query: '"Aptos" blockchain (grant OR grants OR hackathon OR builder program OR funding)'
+    max_results: 5
+    search_depth: advanced
+    topic: news
+    days: 15
+    enabled: true
+
   # =========================================================================
   # Twitter/X — via Twikit-backed social watch.
   # NOTE: These sources remain disabled by default until a valid X login

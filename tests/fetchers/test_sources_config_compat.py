@@ -30,48 +30,38 @@ def test_aave_governance_is_disabled_in_repo_config() -> None:
     assert aave_source["enabled"] is False
 
 
-def test_load_sources_config_does_not_expand_candidate_chains_when_defillama_disabled(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr("src.fetchers.builder.settings.DEFILLAMA_SYNC_ENABLED", False)
-
-    sources_path = tmp_path / "sources.yaml"
-    candidates_path = tmp_path / "chains.candidates.yaml"
-
-    sources_path.write_text(
-        "sources:\n"
-        "  - name: base_source\n"
-        "    fetch_method: rss\n"
-        "    schedule: grant_hackathon\n"
-        "    enabled: true\n",
-        encoding="utf-8",
-    )
-    candidates_path.write_text(
-        "generated_at: '2026-07-02T00:00:00+00:00'\n"
-        "source: defillama\n"
-        "candidate_chains:\n"
-        "  - chain_id: ethereum\n"
-        "    name: Ethereum\n"
-        "    review_status: approved\n"
-        "    enabled: true\n"
-        "  - chain_id: base\n"
-        "    name: Base\n"
-        "    review_status: pending_review\n"
-        "    enabled: true\n"
-        "  - chain_id: sui\n"
-        "    name: Sui\n"
-        "    review_status: approved\n"
-        "    enabled: false\n",
-        encoding="utf-8",
-    )
-
-    config = load_sources_config(str(sources_path), str(candidates_path))
-
+def test_load_sources_config_static_tavily_chain_sources_exist() -> None:
+    config = load_sources_config()
     names = {source["name"] for source in config["sources"]}
 
-    assert "base_source" in names
-    assert "defillama_ethereum_grant_hackathon" not in names
-    assert "defillama_ethereum_bounty" not in names
-    assert "defillama_base_grant_hackathon" not in names
-    assert "defillama_sui_grant_hackathon" not in names
+    expected = {
+        "tavily_ethereum_grants",
+        "tavily_solana_grants",
+        "tavily_base_grants",
+        "tavily_arbitrum_grants",
+        "tavily_polygon_grants",
+        "tavily_avalanche_grants",
+        "tavily_sui_grants",
+        "tavily_monad_grants",
+        "tavily_stellar_grants",
+        "tavily_starknet_grants",
+        "tavily_near_grants",
+        "tavily_aptos_grants",
+    }
+    assert expected.issubset(names)
+
+
+def test_static_tavily_chain_sources_have_correct_metadata() -> None:
+    config = load_sources_config()
+    source_map = {s["name"]: s for s in config["sources"]}
+
+    for name in ("tavily_ethereum_grants", "tavily_solana_grants", "tavily_aptos_grants"):
+        src = source_map[name]
+        assert src["fetch_method"] == "tavily_search"
+        assert src["schedule"] == "grant_hackathon"
+        assert src["source_tier"] == "discovery"
+        assert src["official"] is False
+        assert src["enabled"] is True
 
 
 def test_repo_sources_do_not_include_bounty_schedule() -> None:
