@@ -64,3 +64,10 @@ def test_manual_scan_trigger_endpoint_starts_scan(monkeypatch) -> None:
     body = resp.json()
     assert body["triggered"] is True
     assert body["status"] == "running"
+
+
+def test_manual_scan_service_includes_social_watch_schedule() -> None:
+    from src.chat_api.manual_scan_service import _RUN_SCHEDULES
+
+    assert "grant_hackathon" in _RUN_SCHEDULES
+    assert "social_watch" in _RUN_SCHEDULES

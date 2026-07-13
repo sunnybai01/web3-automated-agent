@@ -131,3 +131,47 @@ chains:
     review_status: approved
     review_notes: approved to expand dynamic discovery coverage
     enabled: true
+  - chain_id: optimism
+    name: Optimism
+    defillama_name: Optimism
+    defillama_chain_id: 10
+    defillama_slug: optimism
+    seed_tvl: 0
+    category: l2
+    priority: 13
+    review_status: approved
+    review_notes: approved to expand dynamic discovery coverage
+    enabled: true
+  - chain_id: berachain
+    name: Berachain
+    defillama_name: Berachain
+    defillama_chain_id: null
+    defillama_slug: berachain
+    seed_tvl: 0
+    category: l1
+    priority: 14
+    review_status: approved
+    review_notes: approved to expand dynamic discovery coverage
+    enabled: true
+  - chain_id: megaeth
+    name: MegaETH
+    defillama_name: MegaETH
+    defillama_chain_id: null
+    defillama_slug: megaeth
+    seed_tvl: 0
+    category: l2
+    priority: 15
+    review_status: approved
+    review_notes: approved to expand dynamic discovery coverage
+    enabled: true
+  - chain_id: sonic
+    name: Sonic
+    defillama_name: Sonic
+    defillama_chain_id: null
+    defillama_slug: sonic
+    seed_tvl: 0
+    category: l1
+    priority: 16
+    review_status: approved
+    review_notes: approved to expand dynamic discovery coverage
+    enabled: true

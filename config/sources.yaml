@@ -50,7 +50,7 @@ sources:
     source_tier: official
     signal_type: grant
     official: true
-    enabled: false
+    enabled: true
 
   - name: uniswap_foundation
     type: rss
@@ -76,7 +76,7 @@ sources:
     source_tier: official
     signal_type: grant
     official: true
-    enabled: false
+    enabled: true
 
   - name: aave_governance
     type: rss
@@ -102,7 +102,7 @@ sources:
     source_tier: official
     signal_type: grant
     official: true
-    enabled: false
+    enabled: true
 
   - name: starknet_foundation
     type: rss
@@ -115,7 +115,7 @@ sources:
     source_tier: official
     signal_type: grant
     official: true
-    enabled: false
+    enabled: true
 
   - name: arweave_grants
     type: rss
@@ -141,7 +141,7 @@ sources:
     source_tier: official
     signal_type: grant
     official: true
-    enabled: false
+    enabled: true
 
   - name: aptos_foundation
     type: rss
@@ -207,7 +207,7 @@ sources:
     source_tier: official
     signal_type: grant
     official: true
-    enabled: false
+    enabled: true
 
   - name: base_grants
     type: rss
@@ -272,7 +272,7 @@ sources:
     source_tier: official
     signal_type: grant
     official: true
-    enabled: false
+    enabled: true
 
   # =========================================================================
   # Hackathons — Daily (09:00, 21:00)
@@ -367,7 +367,98 @@ sources:
     source_tier: official
     signal_type: hackathon
     official: true
-    enabled: false
+    enabled: true
+
+  - name: optimism_grants
+    type: web_scraper
+    url: https://atlas.optimism.io
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: optimism
+    chain: optimism
+    fetch_method: web_scraper
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: true
+
+  - name: starknet_grants
+    type: web_scraper
+    url: https://www.starknet.io/grants/
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: starknet
+    chain: starknet
+    fetch_method: web_scraper
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: true
+
+  - name: sonic_innovator_fund
+    type: web_scraper
+    url: https://docs.soniclabs.com/funding/innovator-fund
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: sonic
+    chain: sonic
+    fetch_method: web_scraper
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: true
+
+  - name: monad_hackathon
+    type: web_scraper
+    url: https://hackathon.monad.xyz
+    schedule: grant_hackathon
+    category: hackathon
+    ecosystem: monad
+    chain: monad
+    fetch_method: web_scraper
+    source_tier: official
+    signal_type: hackathon
+    official: true
+    enabled: true
+
+  - name: near_grants
+    type: web_scraper
+    url: https://near.foundation/grants/
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: near
+    chain: near
+    fetch_method: web_scraper
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: true
+
+  - name: base_ecosystem_fund
+    type: web_scraper
+    url: https://base.org/ecosystem-fund
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: base
+    chain: base
+    fetch_method: web_scraper
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: true
+
+  - name: sui_programs
+    type: web_scraper
+    url: https://sui.io/programs-funding
+    schedule: grant_hackathon
+    category: grant
+    ecosystem: sui
+    chain: sui
+    fetch_method: web_scraper
+    source_tier: official
+    signal_type: grant
+    official: true
+    enabled: true
 
   # ----- Tavily discovery (grants & hackathons not covered by any feed) -----
   - name: tavily_grants_discovery
@@ -404,110 +495,6 @@ sources:
     search_depth: advanced
     topic: news
     days: 15
-    enabled: true
-
-  # =========================================================================
-  # Bounties — Every 2 hours
-  # =========================================================================
-
-  - name: immunefi
-    type: rss
-    url: https://immunefi.com/feed
-    schedule: bounty
-    category: bounty
-    ecosystem: multi
-    fetch_method: rss
-    enabled: false
-
-  - name: gitcoin_bounties
-    type: rss
-    url: https://gitcoin.co/blog/rss
-    schedule: bounty
-    category: bounty
-    ecosystem: multi
-    fetch_method: rss
-    enabled: false
-
-  - name: hackerone_web3
-    type: rss
-    url: https://www.hackerone.com/blog.rss
-    schedule: bounty
-    category: bounty
-    ecosystem: multi
-    fetch_method: rss
-    enabled: false
-
-  - name: github_bounty_label
-    type: github
-    url: ""
-    schedule: bounty
-    category: bounty
-    ecosystem: multi
-    fetch_method: github_search
-    github_queries:
-      - "label:bounty+state:open+is:issue+archived:false"
-      - "label:bounty+is:issue+state:open+archived:false+created:>2024-01-01"
-    orgs:
-      - ethereum
-      - solana-labs
-      - MystenLabs
-      - stellar
-      - aptos-labs
-      - starkware-libs
-      - optimism
-      - uniswap
-      - aave
-      - pancake-swap
-    enabled: true
-
-  - name: layer3
-    type: web_scraper
-    url: https://layer3.xyz/bounties
-    schedule: bounty
-    category: bounty
-    ecosystem: multi
-    fetch_method: web_scraper
-    enabled: true
-
-  - name: onlydust
-    type: github
-    url: ""
-    schedule: bounty
-    category: bounty
-    ecosystem: multi
-    fetch_method: github_search
-    github_queries:
-      - "org:onlydustxyz+is:issue+state:open"
-      - "label:good-first-issue+is:issue+state:open+is:open"
-    orgs:
-      - onlydustxyz
-    enabled: true
-
-  - name: dework
-    type: tavily_search
-    url: ""
-    schedule: bounty
-    category: bounty
-    ecosystem: multi
-    fetch_method: tavily_search
-    query: '(site:immunefi.com OR site:code4rena.com OR site:sherlock.xyz OR site:cantina.xyz OR site:layer3.xyz OR site:onlydust.com OR site:dework.xyz) (web3 OR crypto) (bounty OR "bug bounty" OR "security bounty") (open OR "apply now") -grant -"funding round"'
-    max_results: 5
-    search_depth: advanced
-    topic: news
-    days: 15
-    enabled: true
-
-  - name: superteamdao
-    type: tavily_search
-    url: ""
-    schedule: bounty
-    category: bounty
-    ecosystem: solana
-    fetch_method: tavily_search
-    query: "(site:superteam.fun OR site:earn.superteam.fun) (Solana OR Superteam) (bounty OR bounties) (open OR apply)"
-    max_results: 5
-    search_depth: advanced
-    topic: general
     enabled: true
 
   # =========================================================================
@@ -579,7 +566,7 @@ sources:
     ingestion_mode: direct
     source_kind: account
     watch_priority: normal
-    enabled: false
+    enabled: true
 
   - name: twitter_immunefi
     type: twitter
@@ -592,7 +579,7 @@ sources:
     ingestion_mode: direct
     source_kind: account
     watch_priority: high
-    enabled: false
+    enabled: true
 
   - name: twitter_suinetwork
     type: twitter
@@ -618,7 +605,7 @@ sources:
     ingestion_mode: direct
     source_kind: account
     watch_priority: normal
-    enabled: false
+    enabled: true
 
   - name: twitter_dorahacks
     type: twitter
@@ -709,7 +696,7 @@ sources:
     ingestion_mode: direct
     source_kind: account
     watch_priority: normal
-    enabled: false
+    enabled: true
 
   - name: twitter_polygon
     type: twitter
@@ -722,7 +709,7 @@ sources:
     ingestion_mode: direct
     source_kind: account
     watch_priority: normal
-    enabled: false
+    enabled: true
 
   - name: twitter_uniswap
     type: twitter
@@ -815,6 +802,84 @@ sources:
     watch_priority: low
     enabled: false
 
+  - name: twitter_near
+    type: twitter
+    screen_name: NEARProtocol
+    schedule: social_watch
+    category: social
+    ecosystem: near
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: normal
+    enabled: true
+
+  - name: twitter_avax
+    type: twitter
+    screen_name: avax
+    schedule: social_watch
+    category: social
+    ecosystem: avalanche
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: high
+    enabled: true
+
+  - name: twitter_base
+    type: twitter
+    screen_name: base
+    schedule: social_watch
+    category: social
+    ecosystem: base
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: high
+    enabled: true
+
+  - name: twitter_soniclabs
+    type: twitter
+    screen_name: SonicLabs
+    schedule: social_watch
+    category: social
+    ecosystem: sonic
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: normal
+    enabled: true
+
+  - name: twitter_optimism_grants
+    type: twitter
+    screen_name: OptimismGov
+    schedule: social_watch
+    category: social
+    ecosystem: optimism
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: high
+    enabled: true
+
+  - name: twitter_neardevhub
+    type: twitter
+    screen_name: NearDevHub
+    schedule: social_watch
+    category: social
+    ecosystem: near
+    fetch_method: twitter
+    trust_tier: official
+    ingestion_mode: direct
+    source_kind: account
+    watch_priority: normal
+    enabled: true
+
   # =========================================================================
   # Discord — Bot listener (real-time)
   # =========================================================================
@@ -895,7 +960,5 @@ sources:
 schedules:
   grant_hackathon:
     cron: "0 9,21 * * *" # 09:00 and 21:00 daily
-  bounty:
-    cron: "0 */2 * * *" # every 2 hours
   realtime:
     cron: "" # always-on listener, not cron

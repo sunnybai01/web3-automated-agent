@@ -30,7 +30,9 @@ def test_aave_governance_is_disabled_in_repo_config() -> None:
     assert aave_source["enabled"] is False
 
 
-def test_load_sources_config_expands_approved_candidate_chains(tmp_path: Path) -> None:
+def test_load_sources_config_does_not_expand_candidate_chains_when_defillama_disabled(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("src.fetchers.builder.settings.DEFILLAMA_SYNC_ENABLED", False)
+
     sources_path = tmp_path / "sources.yaml"
     candidates_path = tmp_path / "chains.candidates.yaml"
 
@@ -66,22 +68,21 @@ def test_load_sources_config_expands_approved_candidate_chains(tmp_path: Path) -
     names = {source["name"] for source in config["sources"]}
 
     assert "base_source" in names
-    assert "defillama_ethereum_grant_hackathon" in names
-    assert "defillama_ethereum_bounty" in names
+    assert "defillama_ethereum_grant_hackathon" not in names
+    assert "defillama_ethereum_bounty" not in names
     assert "defillama_base_grant_hackathon" not in names
     assert "defillama_sui_grant_hackathon" not in names
 
-    grant_source = next(
-        source
-        for source in config["sources"]
-        if source["name"] == "defillama_ethereum_grant_hackathon"
-    )
 
-    assert grant_source["fetch_method"] == "tavily_search"
-    assert grant_source["schedule"] == "grant_hackathon"
-    assert grant_source["chain"] == "ethereum"
-    assert grant_source["source_tier"] == "discovery"
-    assert grant_source["official"] is False
+def test_repo_sources_do_not_include_bounty_schedule() -> None:
+    config = load_sources_config()
+
+    bounty_sources = [
+        source for source in config["sources"]
+        if source.get("schedule") == "bounty"
+    ]
+
+    assert bounty_sources == []
 
 
 def test_phase_one_official_sources_exist_in_repo_config() -> None:
@@ -126,7 +127,7 @@ def test_phase_one_official_sources_have_expected_metadata() -> None:
     assert avalanche_hackathons["category"] == "hackathon"
     assert avalanche_hackathons["chain"] == "avalanche"
     assert avalanche_hackathons["fetch_method"] == "web_scraper"
-    assert avalanche_hackathons["enabled"] is False
+    assert avalanche_hackathons["enabled"] is True
 
     assert avalanche_grants["url"] == "https://build.avax.network/grants/team1-mini-grants"
     assert avalanche_grants["enabled"] is True
@@ -233,3 +234,63 @@ def test_requested_core_twitter_accounts_are_enabled_for_social_watch_scan() -> 
 
     for name in expected_enabled:
         assert social_sources[name]["enabled"] is True
+
+
+def test_expanded_twitter_accounts_exist_and_are_enabled() -> None:
+    config = load_sources_config()
+    social_sources = {
+        source["name"]: source
+        for source in config["sources"]
+        if source.get("schedule") == "social_watch"
+    }
+
+    new_handles = {
+        "twitter_solanafndn": "SolanaFndn",
+        "twitter_immunefi": "immunefi",
+        "twitter_stellarorg": "StellarOrg",
+        "twitter_starknet": "StarknetFndn",
+        "twitter_polygon": "0xPolygonFdn",
+        "twitter_near": "NEARProtocol",
+        "twitter_avax": "avax",
+        "twitter_base": "base",
+        "twitter_soniclabs": "SonicLabs",
+        "twitter_optimism_grants": "OptimismGov",
+    }
+
+    for name, screen_name in new_handles.items():
+        assert name in social_sources, f"missing Twitter source: {name}"
+        assert social_sources[name]["screen_name"] == screen_name
+        assert social_sources[name]["enabled"] is True
+        assert social_sources[name]["fetch_method"] == "twitter"
+        assert social_sources[name]["schedule"] == "social_watch"
+
+
+def test_expanded_official_website_sources_exist_and_are_enabled() -> None:
+    config = load_sources_config()
+    source_map = {s["name"]: s for s in config["sources"]}
+
+    expected = {
+        "optimism_rpgf": {"schedule": "grant_hackathon", "chain": "optimism", "official": True},
+        "solana_foundation": {"schedule": "grant_hackathon", "chain": "solana", "official": True},
+        "near_foundation": {"schedule": "grant_hackathon", "chain": "near", "official": True},
+        "starknet_foundation": {"schedule": "grant_hackathon", "chain": "starknet", "official": True},
+        "base_blog": {"schedule": "grant_hackathon", "chain": "base", "official": True},
+        "polygon_village": {"schedule": "grant_hackathon", "chain": "polygon", "official": True},
+        "avalanche_blog": {"schedule": "grant_hackathon", "chain": "avalanche", "official": True},
+        "optimism_grants": {"schedule": "grant_hackathon", "chain": "optimism", "official": True},
+        "starknet_grants": {"schedule": "grant_hackathon", "chain": "starknet", "official": True},
+        "sonic_innovator_fund": {"schedule": "grant_hackathon", "chain": "sonic", "official": True},
+        "monad_hackathon": {"schedule": "grant_hackathon", "chain": "monad", "official": True},
+        "near_grants": {"schedule": "grant_hackathon", "chain": "near", "official": True},
+        "base_ecosystem_fund": {"schedule": "grant_hackathon", "chain": "base", "official": True},
+        "sui_programs": {"schedule": "grant_hackathon", "chain": "sui", "official": True},
+    }
+
+    for name, attrs in expected.items():
+        assert name in source_map, f"missing official source: {name}"
+        src = source_map[name]
+        assert src["enabled"] is True, f"{name} should be enabled"
+        assert src["schedule"] == attrs["schedule"]
+        assert src["chain"] == attrs["chain"]
+        assert src["official"] is True
+        assert src["source_tier"] == "official"

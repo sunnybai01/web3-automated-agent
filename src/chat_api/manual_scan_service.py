@@ -5,7 +5,7 @@ import threading
 import uuid
 from typing import Callable, Any
 
-_RUN_SCHEDULES = ("grant_hackathon", "bounty")
+_RUN_SCHEDULES = ("grant_hackathon", "social_watch")
 _lock = threading.Lock()
 _state: dict[str, Any] = {
     "job_id": None,
