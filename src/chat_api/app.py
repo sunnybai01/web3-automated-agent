@@ -1,21 +1,24 @@
-from fastapi import Depends, FastAPI, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 
 from .auth import verify_internal_key
 
 from .schemas import (
     DailySummaryTriggerResponse,
     DashboardInvestigationsResponse,
-    ManualScanStatusResponse,
+    DashboardOpportunitiesResponse,
     DashboardScheduleLogsResponse,
     DashboardSourceHealthResponse,
-    DashboardOpportunitiesResponse,
+    DedupResetResponse,
+    DeleteOpportunityResponse,
     HealthResponse,
     InvestigateRequest,
     InvestigateResponse,
+    ManualScanStatusResponse,
     ProposeOptionsRequest,
     ProposeOptionsResponse,
     SelectTargetsRequest,
     SelectTargetsResponse,
+    TavilyUnlockResponse,
     VerifyRequest,
     VerifyResponse,
 )
@@ -34,7 +37,7 @@ def health() -> HealthResponse:
     dependencies=[Depends(verify_internal_key)],
 )
 def dashboard_opportunities(
-    event_types: list[str] = Query(default=["grant", "hackathon", "bounty"]),
+    event_types: list[str] = Query(default=["grant", "hackathon"]),
     ecosystem: str = "",
     min_score: float = 5.0,
     days: int = 15,
@@ -52,6 +55,24 @@ def dashboard_opportunities(
         }
     )
     return DashboardOpportunitiesResponse(**result)
+
+
+@app.delete(
+    "/api/v1/dashboard/opportunities/{event_id}",
+    response_model=DeleteOpportunityResponse,
+    dependencies=[Depends(verify_internal_key)],
+)
+def delete_dashboard_opportunity(event_id: int) -> DeleteOpportunityResponse:
+    from . import dashboard_service
+
+    try:
+        result = dashboard_service.delete_opportunity(event_id)
+    except ValueError as exc:
+        if str(exc) == "event_not_found":
+            raise HTTPException(status_code=404, detail="event_not_found") from exc
+        raise
+
+    return DeleteOpportunityResponse(**result)
 
 
 @app.get(
@@ -170,3 +191,51 @@ def propose_options_endpoint(payload: ProposeOptionsRequest) -> ProposeOptionsRe
 
     result = proposal_service.propose_options(payload.verified_facts)
     return ProposeOptionsResponse(**result)
+
+
+@app.post(
+    "/api/v1/admin/tavily-unlock",
+    response_model=TavilyUnlockResponse,
+    dependencies=[Depends(verify_internal_key)],
+)
+def tavily_unlock() -> TavilyUnlockResponse:
+    """Manually unlock all Tavily cooldowns, resetting last_success_at to NULL."""
+    from src.db.queries import unlock_tavily_cooldown
+    from src.db.database import SessionLocal
+
+    with SessionLocal() as db:
+        count = unlock_tavily_cooldown(db)
+        db.commit()
+
+    return TavilyUnlockResponse(
+        status="ok",
+        unlocked_count=count,
+        message=f"Unlocked {count} tavily source(s). They will fetch on next scheduler tick.",
+    )
+
+
+@app.post(
+    "/api/v1/admin/reset-dedup",
+    response_model=DedupResetResponse,
+    dependencies=[Depends(verify_internal_key)],
+)
+def reset_dedup(full: bool = Query(False, description="If true, truncate ALL raw_signals instead of just orphans")) -> DedupResetResponse:
+    """Reset deduplication state (ChromaDB vectors + raw_signals) for a clean rescan.
+
+    - Default (full=false): Clears all ChromaDB vectors and purges only
+      raw_signals that have no linked events (orphans).
+    - Full (full=true): Clears all ChromaDB vectors AND truncates the
+      entire raw_signals table. Use this for a complete fresh rescan.
+    """
+    from src.chat_api.dedup_reset_service import reset_all_dedup_state
+
+    result = reset_all_dedup_state(full=full)
+
+    error = result.get("vector_error") or result.get("signal_error") or ""
+    return DedupResetResponse(
+        status="ok" if not error else "partial",
+        vectors_cleared=result["vectors_cleared"],
+        signals_cleared=result["signals_cleared"],
+        message=f"Vectors cleared: {result['vectors_cleared']}, signals cleared: {result['signals_cleared']}",
+        error=error,
+    )

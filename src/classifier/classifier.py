@@ -29,7 +29,7 @@ class OpportunityClassifier:
         """Classify a single fetched item.
 
         Returns (category, structured_data).
-        - category: "GRANT" | "HACKATHON" | "BOUNTY" | "NOISE" | None (on error)
+        - category: "GRANT" | "HACKATHON" | "NOISE" | None (on error)
         - structured_data: full extracted event dict, or None
         """
         # Stage 1: keyword coarse filter
@@ -50,6 +50,11 @@ class OpportunityClassifier:
 
         category = result.get("category", "NOISE")
         confidence = result.get("confidence", 0.0)
+
+        # Bounty opportunities are intentionally out of scope — drop them so no
+        # new bounty events are ever created, even if the LLM still emits BOUNTY.
+        if category == "BOUNTY":
+            return "NOISE", None
 
         if category == "NOISE" or confidence < self.CONFIDENCE_THRESHOLD:
             return "NOISE", None

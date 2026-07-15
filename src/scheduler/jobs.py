@@ -14,6 +14,7 @@ GRANT_HACKATHON_SCHEDULE = "0 9 * * *"   # 09:00 daily
 HEARTBEAT_SCHEDULE = f"*/{settings.HEARTBEAT_INTERVAL_MINUTES} * * * *"
 DAILY_SUMMARY_SCHEDULE = settings.DAILY_SUMMARY_CRON
 SOCIAL_WATCH_INTERVAL_MINUTES = max(1, int(settings.SOCIAL_WATCH_INTERVAL_MINUTES))
+TAVILY_UNLOCK_SCHEDULE = "0 0 * * *"  # midnight Asia/Shanghai
 
 
 def _heartbeat_trigger():
@@ -32,7 +33,7 @@ def create_scheduler() -> BackgroundScheduler:
     return scheduler
 
 
-def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, social_watch_fn, daily_summary_fn):
+def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, social_watch_fn, daily_summary_fn, tavily_unlock_fn):
     """Register all scheduled jobs on the given scheduler.
 
     Args:
@@ -41,6 +42,7 @@ def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, soc
         heartbeat_fn: callable() that sends heartbeat + checks source health
         social_watch_fn: callable() that runs the social watch pipeline
         daily_summary_fn: callable() that builds and sends the daily summary
+        tavily_unlock_fn: callable() that resets Tavily cooldown at midnight
     """
     # Grant + Hackathon — once daily
     scheduler.add_job(
@@ -78,9 +80,19 @@ def register_jobs(scheduler: BackgroundScheduler, pipeline_fn, heartbeat_fn, soc
             replace_existing=True,
         )
 
+    # Tavily cooldown unlock — midnight daily
+    scheduler.add_job(
+        tavily_unlock_fn,
+        trigger=CronTrigger.from_crontab(TAVILY_UNLOCK_SCHEDULE, timezone="Asia/Shanghai"),
+        id="tavily_unlock",
+        name="Tavily Cooldown Unlock (Midnight)",
+        replace_existing=True,
+    )
+
     logger.info(
         f"Registered jobs: grant_hackathon({GRANT_HACKATHON_SCHEDULE}), "
         f"heartbeat({HEARTBEAT_SCHEDULE}), "
         f"social_watch({settings.SOCIAL_WATCH_INTERVAL_MINUTES}m), "
+        f"tavily_unlock({TAVILY_UNLOCK_SCHEDULE}), "
         f"daily_summary({'disabled' if not settings.DAILY_SUMMARY_ENABLED else DAILY_SUMMARY_SCHEDULE})"
     )

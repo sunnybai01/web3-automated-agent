@@ -65,19 +65,98 @@ body {
   font-family: "SF Pro Display", "Inter", "Segoe UI", sans-serif;
 }
 
-.copilotKitChat,
-.copilotKitPopup {
+/* CopilotKit v2 theming — v2 reads token vars from [data-copilotkit],
+   not the legacy --copilot-kit-* variables. Map them to our design tokens. */
+[data-copilotkit] {
+  --background: hsl(var(--card));
+  --foreground: hsl(var(--foreground));
+  --primary: hsl(var(--primary));
+  --primary-foreground: hsl(var(--primary-foreground));
+  --muted: hsl(var(--muted-foreground));
+  --border: hsl(var(--border));
+  --ring: hsl(var(--ring));
+  --radius: 1rem;
+
+  /* Legacy v1 vars kept for any v1 surfaces still in play */
   --copilot-kit-primary-color: hsl(var(--primary));
   --copilot-kit-contrast-color: hsl(var(--primary-foreground));
-  --copilot-kit-background-color: hsl(var(--background));
-  --copilot-kit-secondary-color: hsl(var(--card));
+  --copilot-kit-background-color: hsl(var(--card));
+  --copilot-kit-secondary-color: hsl(var(--background));
   --copilot-kit-separator-color: hsl(var(--border));
+  --copilot-kit-muted-color: hsl(var(--muted-foreground));
 }
 
 .copilotKitChat {
   width: 100%;
+  height: 100%;
+  background: transparent;
+  font-family: "SF Pro Display", "Inter", "Segoe UI", sans-serif;
 }
 
+/* Roomier message column */
+.copilotKitMessages {
+  padding: 1.25rem 1.5rem;
+}
+
+.copilotKitMessage {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  border-radius: 1rem;
+}
+
+.copilotKitMessage.copilotKitAssistantMessage {
+  background: transparent;
+  padding-block: 0.5rem;
+}
+
+.copilotKitMessage.copilotKitUserMessage {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-radius: 1.25rem 1.25rem 0.375rem 1.25rem;
+  padding: 0.625rem 0.9375rem;
+}
+
+/* Tool-call / action renders: nuke ALL oversized SVGs in the CopilotKit tree.
+   Some tool-call icons are rendered outside .copilotKitMessage by generative UI,
+   so we target the entire [data-copilotkit] container with !important. */
+[data-copilotkit] svg {
+  max-width: 1em !important;
+  max-height: 1em !important;
+  width: 1em !important;
+  height: 1em !important;
+}
+
+/* Exception: the send-button icon and any explicitly sized chat UI chrome */
+[data-copilotkit] .copilotKitSendButton svg,
+[data-copilotkit] button[aria-label] svg {
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+/* Tool-call chevron icon — rendered OUTSIDE [data-copilotkit] by CopilotKit's
+   generative UI (subComponent), so we target the stable data-testid directly. */
+[data-testid="copilot-tool-render"] svg {
+  width: 0.875rem !important;
+  height: 0.875rem !important;
+  flex-shrink: 0;
+}
+
+/* Give agent-state / tool renders a card-like frame so they don't float */
+.copilotKitMessage [data-message-role="tool"],
+.copilotKitToolCall,
+.copilotKitAgentStateRender {
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.875rem;
+  background: hsl(var(--background));
+  padding: 0.5rem 0.75rem;
+  margin-block: 0.375rem;
+  font-size: 0.8125rem;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Markdown polish */
 .copilotKitMessagesContainer,
 .copilotKitMessages,
 .copilotKitMessage,
@@ -88,27 +167,84 @@ body {
   word-break: break-word;
 }
 
-.copilotKitMarkdown svg,
-.copilotKitMarkdownElement svg,
-.copilotKitMessage svg {
-  max-width: 1em;
-  max-height: 1em;
-  width: 1em;
-  height: 1em;
-  display: inline-block;
-  flex-shrink: 0;
-  vertical-align: text-bottom;
-}
-
 .copilotKitMarkdown img,
 .copilotKitMarkdownElement img {
   max-width: 100%;
   height: auto;
+  border-radius: 0.75rem;
+}
+
+.copilotKitMarkdown hr {
+  padding: 1rem 0;
 }
 
 .copilotKitMarkdown blockquote,
 .copilotKitMarkdownElement blockquote {
   margin: 0.75rem 0;
   padding-left: 0.75rem;
-  border-left: 3px solid hsl(var(--border));
+  border-left: 3px solid hsl(var(--primary));
+  color: hsl(var(--muted-foreground));
+}
+
+/* Tables rendered inside markdown responses */
+.copilotKitMarkdown table,
+.copilotKitMarkdownElement table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  font-size: 0.875rem;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.copilotKitMarkdown th,
+.copilotKitMarkdownElement th {
+  background: hsl(var(--muted));
+  text-align: left;
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+}
+
+.copilotKitMarkdown td,
+.copilotKitMarkdownElement td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid hsl(var(--border));
+  vertical-align: top;
+}
+
+.copilotKitMarkdown code,
+.copilotKitMarkdownElement code {
+  background: hsl(var(--muted));
+  border-radius: 0.375rem;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.85em;
+}
+
+/* Composer / input */
+.copilotKitInput {
+  border-radius: 1.25rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  margin: 0 1rem 1rem;
+}
+
+.copilotKitInput .copilotKitSendButton {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-radius: 9999px;
+}
+
+.copilotKitInput .copilotKitSendButton:disabled {
+  opacity: 0.5;
+}
+
+/* Scrollbar */
+.copilotKitMessages::-webkit-scrollbar {
+  width: 8px;
+}
+
+.copilotKitMessages::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border));
+  border-radius: 4px;
 }

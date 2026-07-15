@@ -111,7 +111,6 @@ def test_list_opportunities_filters_to_official_trust(monkeypatch) -> None:
 
     result = dashboard_service.list_opportunities(
         {
-            "event_types": ["grant", "hackathon", "bounty"],
             "ecosystem": "",
             "min_score": 5.0,
             "days": 15,
@@ -122,10 +121,52 @@ def test_list_opportunities_filters_to_official_trust(monkeypatch) -> None:
     assert result["metrics"]["total_shown"] == 1
     assert result["metrics"]["official"] == 1
     assert result["metrics"]["discovery"] == 0
+    assert result["metrics"]["grants"] == 1
+    assert result["metrics"]["hackathons"] == 0
+    assert "bounties" not in result["metrics"]
     assert len(result["items"]) == 1
     assert result["items"][0]["id"] == 1
     assert result["items"][0]["source_trust"] == "official"
     assert result["items"][0]["verification_verdict"] == "verified"
+
+
+def test_delete_opportunity_returns_deleted_payload(monkeypatch) -> None:
+    fake_event = SimpleNamespace(id=7)
+
+    class _FakeSessionForDelete:
+        def close(self):
+            return None
+
+    fake_db_module = types.ModuleType("src.db.database")
+    fake_db_module.SessionLocal = lambda: _FakeSessionForDelete()
+
+    fake_queries_module = types.ModuleType("src.db.queries")
+    fake_queries_module.delete_event = lambda db, event_id: fake_event if event_id == 7 else None
+
+    monkeypatch.setitem(sys.modules, "src.db.database", fake_db_module)
+    monkeypatch.setitem(sys.modules, "src.db.queries", fake_queries_module)
+
+    result = dashboard_service.delete_opportunity(7)
+
+    assert result == {"status": "success", "event_id": 7, "deleted": True}
+
+
+def test_delete_opportunity_raises_for_missing_event(monkeypatch) -> None:
+    class _FakeSessionForDelete:
+        def close(self):
+            return None
+
+    fake_db_module = types.ModuleType("src.db.database")
+    fake_db_module.SessionLocal = lambda: _FakeSessionForDelete()
+
+    fake_queries_module = types.ModuleType("src.db.queries")
+    fake_queries_module.delete_event = lambda db, event_id: None
+
+    monkeypatch.setitem(sys.modules, "src.db.database", fake_db_module)
+    monkeypatch.setitem(sys.modules, "src.db.queries", fake_queries_module)
+
+    with __import__("pytest").raises(ValueError, match="event_not_found"):
+        dashboard_service.delete_opportunity(99)
 
 
 def test_list_investigations_returns_summary_and_items(monkeypatch) -> None:

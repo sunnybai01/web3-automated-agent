@@ -82,6 +82,26 @@ def test_build_daily_summary_includes_totals_and_new_event_sources() -> None:
                 source_url="https://x.com/buildonbase/status/1",
             )
         )
+        older_event = Event(
+            event_type="bounty",
+            title="Arbitrum Security Bounty",
+            description="Historical high-score event.",
+            ecosystem="arbitrum",
+            final_score=8.6,
+            created_at=datetime.datetime(2026, 7, 1, 4, 0),
+        )
+        db.add(older_event)
+        db.commit()
+        db.refresh(older_event)
+
+        db.add(
+            EventSource(
+                event_id=older_event.id,
+                source_type="rss",
+                source_name="immunefi_rss",
+                source_url="https://immunefi.com/bounty/arb",
+            )
+        )
         db.commit()
 
         payload = build_daily_summary(db, summary_date=summary_date)
@@ -94,6 +114,16 @@ def test_build_daily_summary_includes_totals_and_new_event_sources() -> None:
         assert payload["new_events"][0]["title"] == "Base Builder Rewards"
         assert payload["new_events"][0]["source_type"] == "twitter"
         assert payload["new_events"][0]["source_url"] == "https://x.com/buildonbase/status/1"
+        assert payload["today_scan_stats"] == {
+            "total_new_events": 1,
+            "by_event_type": {"grant": 1},
+            "by_source_type": {"twitter": 1},
+        }
+        # Bounty events are out of scope and must be excluded from every summary section.
+        assert payload["historical_high_score"]["total_count"] == 1
+        assert payload["historical_high_score"]["by_event_type"] == {"grant": 1}
+        assert payload["historical_high_score"]["recent_events"][0]["title"] == "Base Builder Rewards"
+        assert payload["historical_high_score"]["recent_events"][0]["source_type"] == "twitter"
     finally:
         db.close()
 
@@ -123,5 +153,15 @@ def test_build_daily_summary_handles_empty_new_events() -> None:
         assert payload["new_events_count"] == 0
         assert payload["new_event_sources"] == []
         assert payload["new_events"] == []
+        assert payload["today_scan_stats"] == {
+            "total_new_events": 0,
+            "by_event_type": {},
+            "by_source_type": {},
+        }
+        assert payload["historical_high_score"] == {
+            "total_count": 0,
+            "by_event_type": {},
+            "recent_events": [],
+        }
     finally:
         db.close()

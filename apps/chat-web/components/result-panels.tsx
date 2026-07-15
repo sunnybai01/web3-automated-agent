@@ -83,7 +83,7 @@ export default function ResultPanels({
           <div className="rounded-3xl border border-dashed border-border bg-background/70 p-5 text-sm text-muted-foreground">
             {isRunning
               ? "The agent is fetching database facts and assembling the verification report..."
-              : "No analysis loaded yet. Use the chat or click Run Verification Now to populate this panel."}
+              : "No analysis loaded yet. Click Verify on any opportunity above or use the chat to populate this panel."}
           </div>
         ) : (
           <>
@@ -196,7 +196,7 @@ export default function ResultPanels({
                 <div className="rounded-2xl border border-dashed border-border bg-background/70 p-4 text-sm text-muted-foreground">
                   {isInvestigating
                     ? "The agent is investigating the selected opportunity..."
-                    : "No investigation loaded yet. Run Investigation on a selected opportunity to inspect historical matches and supporting evidence."}
+                    : "No investigation loaded yet. Use Verify or Ask Copilot on a selected opportunity to inspect historical matches and supporting evidence."}
                 </div>
               ) : (
                 <div className="space-y-3">

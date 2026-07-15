@@ -1,5 +1,6 @@
 """Common database queries."""
 import datetime
+import logging
 from typing import Optional, List
 
 from sqlalchemy import and_, func
@@ -62,6 +63,15 @@ def update_event(db: Session, event_id: int, **kwargs) -> Optional[Event]:
 
 def get_event_by_id(db: Session, event_id: int) -> Optional[Event]:
     return db.query(Event).filter(Event.id == event_id).first()
+
+
+def delete_event(db: Session, event_id: int) -> Optional[Event]:
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        return None
+    db.delete(event)
+    db.commit()
+    return event
 
 
 def get_recent_events(
@@ -148,6 +158,22 @@ def upsert_source_health(db: Session, source_name: str, success: bool = True,
 
 def get_source_health(db: Session, source_name: str) -> Optional[SourceHealth]:
     return db.query(SourceHealth).filter(SourceHealth.source_name == source_name).first()
+
+
+def unlock_tavily_cooldown(db: Session) -> int:
+    """Reset last_success_at for all Tavily sources so they can fetch again.
+
+    Returns the number of sources unlocked.
+    """
+    count = (
+        db.query(SourceHealth)
+        .filter(SourceHealth.source_name.like("tavily_%"))
+        .update({"last_success_at": None}, synchronize_session="fetch")
+    )
+    db.commit()
+    logger = logging.getLogger(__name__)
+    logger.info(f"Unlocked {count} Tavily sources (cooldown reset)")
+    return count
 
 
 def get_unhealthy_sources(db: Session) -> List[SourceHealth]:
@@ -361,3 +387,49 @@ def mark_daily_summary_failed(
     db.commit()
     db.refresh(row)
     return row
+
+
+# --- Dedup Reset ---
+
+def get_event_signal_ids(db: Session, event_id: int) -> list[int]:
+    """Return all raw_signal IDs linked to an event."""
+    rows = db.query(EventSource.raw_signal_id).filter(
+        EventSource.event_id == event_id,
+        EventSource.raw_signal_id.isnot(None),
+    ).all()
+    return [r[0] for r in rows if r[0] is not None]
+
+
+def delete_raw_signals_by_ids(db: Session, signal_ids: list[int]) -> int:
+    """Delete raw_signals by their IDs. Returns count."""
+    if not signal_ids:
+        return 0
+    count = db.query(RawSignal).filter(RawSignal.id.in_(signal_ids)).delete(synchronize_session="fetch")
+    db.commit()
+    return count
+
+
+def purge_orphan_raw_signals(db: Session) -> int:
+    """Delete raw_signals that have no related event_sources.
+
+    Returns the number of raw_signals purged.
+    """
+    subquery = db.query(EventSource.raw_signal_id).filter(
+        EventSource.raw_signal_id.isnot(None)
+    ).distinct()
+    count = db.query(RawSignal).filter(
+        ~RawSignal.id.in_(subquery)
+    ).delete(synchronize_session="fetch")
+    db.commit()
+    return count
+
+
+def truncate_raw_signals(db: Session) -> int:
+    """Delete ALL raw_signals. Use with caution — needed for full rescan.
+
+    Returns the number of rows deleted.
+    """
+    count = db.query(RawSignal).count()
+    db.query(RawSignal).delete()
+    db.commit()
+    return count

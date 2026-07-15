@@ -10,10 +10,9 @@ Output a single JSON object with no additional text.
 Categories:
 - "GRANT": Ecosystem fund, foundation grant, fellowship, RFP, quadratic funding round, retroactive funding, builder program with funding
 - "HACKATHON": Hackathon, buildathon, code sprint, game jam, hacker house, demo day, pitch competition
-- "BOUNTY": Bug bounty, security bounty, specific paid task, contribution reward, vulnerability disclosure program
-- "NOISE": Not a funding opportunity (e.g., marketing hype, airdrop announcement, general news, NFT mint, token sale)
+- "NOISE": Not an in-scope opportunity (e.g., bug bounty / security bounty programs, marketing hype, airdrop announcement, general news, NFT mint, token sale)
 
-For GRANT/HACKATHON/BOUNTY, extract all structured fields below. For NOISE, return only the category."""
+For GRANT/HACKATHON, extract all structured fields below. For NOISE, return only the category."""
 
 CLASSIFY_USER_TEMPLATE = """Analyze this content and determine if it describes a Web3 funding opportunity.
 
@@ -24,9 +23,10 @@ Content text:
 Source: {source_name} ({source_type})
 
 Return JSON with these fields:
-- category: "GRANT" | "HACKATHON" | "BOUNTY" | "NOISE"
+- category: "GRANT" | "HACKATHON" | "NOISE"
 - title: a clean, concise title for this opportunity (max 200 chars)
 - description: 2-3 sentence summary (max 500 chars)
+- start_date: ISO 8601 date when applications/registration opens or the program starts, or null if not found
 - deadline: ISO 8601 date or null if not found
 - amount: the prize/funding amount (e.g. "$50,000", "5 ETH", "Up to $100k") or null
 - track: the focus area (e.g. "DeFi", "Security", "Infrastructure", "ZK", "AI", "Gaming") or null
@@ -80,10 +80,11 @@ EXTRACTION_SCHEMA = {
     "properties": {
         "category": {
             "type": "string",
-            "enum": ["GRANT", "HACKATHON", "BOUNTY", "NOISE"],
+            "enum": ["GRANT", "HACKATHON", "NOISE"],
         },
         "title": {"type": "string", "maxLength": 200},
         "description": {"type": "string", "maxLength": 500},
+        "start_date": {"type": ["string", "null"]},
         "deadline": {"type": ["string", "null"]},
         "amount": {"type": ["string", "null"]},
         "track": {"type": ["string", "null"]},

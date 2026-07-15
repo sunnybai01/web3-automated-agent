@@ -68,36 +68,6 @@ keywords:
     - 黑客马拉松
     - 编程马拉松
 
-  # Bounty-related
-  bounty:
-    - bounty
-    - bounties
-    - bug bounty
-    - bug bounties
-    - bounty pool
-    - vulnerability bounty
-    - security bounty
-    - reward
-    - rewards program
-    - bug fix reward
-    - whitehat
-    - responsible disclosure
-    - task
-    - paid task
-    - contribution reward
-    - contributor reward
-    - task reward
-    - gig
-    - bounty hunter
-    - bounty board
-    - bounty program
-    - immunefi
-    - hackerone
-    - bugcrowd
-    - 赏金
-    - 漏洞赏金
-    - 任务奖励
-
   # General signal words (increase recall)
   general:
     - apply now

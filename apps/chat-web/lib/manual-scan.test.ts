@@ -28,28 +28,17 @@ describe("manual scan helpers", () => {
           fraud: 0,
           pushed: 1,
         },
-        {
-          schedule: "bounty",
-          status: "success",
-          fetched: 6,
-          new: 3,
-          deduped: 3,
-          classified: 3,
-          verified: 2,
-          fraud: 1,
-          pushed: 2,
-        },
       ],
     });
 
     expect(summary).toEqual({
-      fetched: 18,
-      new: 5,
-      deduped: 13,
-      classified: 5,
-      verified: 3,
-      fraud: 1,
-      pushed: 3,
+      fetched: 12,
+      new: 2,
+      deduped: 10,
+      classified: 2,
+      verified: 1,
+      fraud: 0,
+      pushed: 1,
     });
   });
 
@@ -60,41 +49,14 @@ describe("manual scan helpers", () => {
       triggered: true,
       started_at: "2026-07-02T09:00:00Z",
       finished_at: "",
-      current_stage: "bounty",
+      current_stage: "grant_hackathon",
       error: "",
-      schedules: [
-        {
-          schedule: "grant_hackathon",
-          status: "success",
-          fetched: 10,
-          new: 0,
-          deduped: 10,
-          classified: 0,
-          verified: 0,
-          fraud: 0,
-          pushed: 0,
-        },
-      ],
+      schedules: [],
     });
 
     expect(schedules).toEqual([
       {
         schedule: "grant_hackathon",
-        status: "success",
-        result: {
-          schedule: "grant_hackathon",
-          status: "success",
-          fetched: 10,
-          new: 0,
-          deduped: 10,
-          classified: 0,
-          verified: 0,
-          fraud: 0,
-          pushed: 0,
-        },
-      },
-      {
-        schedule: "bounty",
         status: "running",
         result: null,
       },

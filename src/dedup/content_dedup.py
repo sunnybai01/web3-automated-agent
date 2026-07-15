@@ -1,4 +1,8 @@
-"""L2 semantic deduplication — ChromaDB vector similarity + 15-day sliding window."""
+"""L2 semantic deduplication — ChromaDB vector similarity + 15-day sliding window.
+
+Uses LLM-extracted structured summaries for embedding (cleaner signal than raw text).
+Falls back to raw title+description if LLM is unavailable.
+"""
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Tuple
@@ -9,6 +13,7 @@ from config.settings import settings
 from src.db.models import Event
 from src.db.queries import get_events_in_window, add_event_source, update_event, insert_event
 from .vector_store import VectorStore
+from .llm_summary import LLMSummaryExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +28,11 @@ class ContentDeduplicator:
     4. Otherwise: it's new — index and return
     """
 
-    def __init__(self, vector_store: VectorStore):
+    def __init__(self, vector_store: VectorStore, llm_extractor: Optional[LLMSummaryExtractor] = None):
         self.vs = vector_store
-        self.threshold = settings.SIMILARITY_THRESHOLD  # default: 0.65
-        self.window_days = settings.SLIDING_WINDOW_DAYS  # default: 15
+        self.threshold = settings.SIMILARITY_THRESHOLD  # default: 0.75
+        self.window_days = settings.SLIDING_WINDOW_DAYS  # default: 14
+        self.llm = llm_extractor or LLMSummaryExtractor()
 
     def check_and_process(
         self,
@@ -45,7 +51,9 @@ class ContentDeduplicator:
         """
         title = event_data.get("title", "")
         description = event_data.get("description", "")
-        query_text = f"{title} {description}"[:2000]
+
+        # Use LLM summary for embedding (falls back to raw text if unavailable)
+        query_text = self.llm.get_embedding_text(title, description)
 
         # Search ChromaDB for near-duplicates within the window
         similar = self.vs.search_similar(query_text, n_results=5)

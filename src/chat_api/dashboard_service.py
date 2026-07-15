@@ -20,7 +20,7 @@ def list_opportunities(filters: dict) -> dict:
     from src.db.database import SessionLocal
     from src.db.models import Event
 
-    event_types = filters.get("event_types") or ["grant", "hackathon", "bounty"]
+    event_types = filters.get("event_types") or ["grant", "hackathon"]
     ecosystem = (filters.get("ecosystem") or "").strip()
     min_score = float(filters.get("min_score", 5.0))
     days = int(filters.get("days", 14))
@@ -78,13 +78,53 @@ def list_opportunities(filters: dict) -> dict:
                 "avg_score": avg_score,
                 "verified_percent": verified_percent,
                 "grants": sum(1 for event in events if event.event_type == "grant"),
-                "bounties": sum(1 for event in events if event.event_type == "bounty"),
                 "hackathons": sum(1 for event in events if event.event_type == "hackathon"),
                 "official": sum(1 for event in events if _source_trust_from_event(event) == "official"),
                 "discovery": sum(1 for event in events if _source_trust_from_event(event) == "discovery"),
             },
             "items": items,
         }
+    finally:
+        db.close()
+
+
+def delete_opportunity(event_id: int) -> dict:
+    import logging
+
+    from src.db.database import SessionLocal
+    from src.db.queries import delete_event, get_event_signal_ids, delete_raw_signals_by_ids
+
+    logger = logging.getLogger(__name__)
+    db = SessionLocal()
+    try:
+        # Capture signal IDs before deleting event (cascade deletes event_sources)
+        signal_ids = get_event_signal_ids(db, event_id)
+
+        deleted = delete_event(db, event_id)
+        if deleted is None:
+            raise ValueError("event_not_found")
+
+        # Cleanup dedup traces so re-fetches aren't blocked
+        if signal_ids:
+            try:
+                count = delete_raw_signals_by_ids(db, signal_ids)
+                logger.info(
+                    f"Cleaned up {count} raw_signals for deleted event #{event_id}"
+                )
+            except Exception:
+                logger.warning(f"Failed to clean raw_signals for event #{event_id}", exc_info=True)
+
+        # Remove ChromaDB vector so semantic dedup doesn't block re-fetch
+        try:
+            from src.dedup.vector_store import VectorStore
+
+            vs = VectorStore()
+            vs.delete(f"event_{event_id}")
+            logger.info(f"Cleaned ChromaDB vector for event #{event_id}")
+        except Exception:
+            logger.warning(f"Failed to clean ChromaDB vector for event #{event_id}", exc_info=True)
+
+        return {"status": "success", "event_id": event_id, "deleted": True}
     finally:
         db.close()
 

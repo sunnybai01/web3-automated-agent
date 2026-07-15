@@ -12,6 +12,7 @@ vi.mock("@copilotkit/react-ui", () => ({
 
 import AgentChat from "./agent-chat";
 import { normalizeAnalysisTargetInput } from "./agent-chat";
+import { removeOpportunityFromState } from "./agent-chat";
 import { scrollToRelatedPanel } from "./agent-chat";
 import { shouldRequestTabData } from "./agent-chat";
 
@@ -25,6 +26,109 @@ it("renders dashboard-first workspace", () => {
   expect(html).toContain("Run Scan");
   expect(html).toContain("Send Daily Summary");
   expect(html).not.toContain("Page Copilot");
+});
+
+it("removes a deleted opportunity from dashboard state", () => {
+  const first = {
+    id: 1,
+    score: 8.1,
+    type: "GRANT",
+    title: "Base Builder Fund",
+    ecosystem: "base",
+    amount: "$50,000",
+    deadline: "2026-07-20",
+    heat: 2,
+    verified: true,
+    source_trust: "official",
+    verification_verdict: "verified",
+    apply_url: "https://apply.base.org",
+  };
+  const second = {
+    id: 2,
+    score: 7.4,
+    type: "HACKATHON",
+    title: "Sui Overflow",
+    ecosystem: "sui",
+    amount: "$20,000",
+    deadline: "2026-08-01",
+    heat: 1,
+    verified: true,
+    source_trust: "official",
+    verification_verdict: "verified",
+    apply_url: "https://sui.io/overflow",
+  };
+
+  const result = removeOpportunityFromState(
+    {
+      metrics: {
+        total_shown: 2,
+        avg_score: 7.8,
+        verified_percent: 100,
+        grants: 1,
+        hackathons: 1,
+        official: 2,
+        discovery: 0,
+      },
+      items: [first, second],
+    },
+    second,
+    2
+  );
+
+  expect(result.dashboardData?.items).toEqual([first]);
+  expect(result.selectedOpportunity).toEqual(first);
+});
+
+it("keeps the current selection when deleting a different row", () => {
+  const first = {
+    id: 1,
+    score: 8.1,
+    type: "GRANT",
+    title: "Base Builder Fund",
+    ecosystem: "base",
+    amount: "$50,000",
+    deadline: "2026-07-20",
+    heat: 2,
+    verified: true,
+    source_trust: "official",
+    verification_verdict: "verified",
+    apply_url: "https://apply.base.org",
+  };
+  const second = {
+    id: 2,
+    score: 7.4,
+    type: "HACKATHON",
+    title: "Sui Overflow",
+    ecosystem: "sui",
+    amount: "$20,000",
+    deadline: "2026-08-01",
+    heat: 1,
+    verified: true,
+    source_trust: "official",
+    verification_verdict: "verified",
+    apply_url: "https://sui.io/overflow",
+  };
+
+  const result = removeOpportunityFromState(
+    {
+      metrics: {
+        total_shown: 2,
+        avg_score: 7.8,
+        verified_percent: 100,
+        grants: 1,
+        hackathons: 1,
+        official: 2,
+        discovery: 0,
+      },
+      items: [first, second],
+    },
+    first,
+    2
+  );
+
+  expect(result.dashboardData?.items).toEqual([first]);
+  expect(result.selectedOpportunity).toEqual(first);
+  expect(result.dashboardData?.metrics.total_shown).toBe(1);
 });
 
 it("prefers a specific event id over free-form tool filters", () => {

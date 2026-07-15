@@ -59,6 +59,34 @@ def test_send_daily_summary_posts_message(monkeypatch) -> None:
         {
             "summary_date": "2026-07-06",
             "totals": {"fetched": 60, "new": 2, "deduped": 35, "classified": 13, "verified": 4, "pushed": 1},
+            "today_scan_stats": {
+                "total_new_events": 2,
+                "by_event_type": {"grant": 1, "bounty": 1},
+                "by_source_type": {"twitter": 1, "rss": 1},
+            },
+            "historical_high_score": {
+                "threshold": 7.0,
+                "total_count": 3,
+                "by_event_type": {"grant": 2, "bounty": 1},
+                "recent_events": [
+                    {
+                        "event_type": "grant",
+                        "title": "Base Builder Rewards",
+                        "final_score": 7.8,
+                        "source_type": "twitter",
+                        "source_name": "twitter_buildonbase",
+                        "source_url": "https://x.com/buildonbase/status/1",
+                    },
+                    {
+                        "event_type": "bounty",
+                        "title": "Arbitrum Security Bounty",
+                        "final_score": 8.6,
+                        "source_type": "rss",
+                        "source_name": "immunefi_rss",
+                        "source_url": "https://immunefi.com/bounty/arb",
+                    },
+                ],
+            },
             "new_events_count": 1,
             "new_event_sources": ["twitter_buildonbase"],
             "new_events": [
@@ -80,4 +108,8 @@ def test_send_daily_summary_posts_message(monkeypatch) -> None:
     assert "twitter_buildonbase" in sent["text"]
     assert "<https://x.com/buildonbase/status/1|Base Builder Rewards>" in sent["text"]
     assert "| Source: Twitter" in sent["text"]
+    assert "Today's new content stats" in sent["text"]
+    assert "By event type: grant: 1, bounty: 1" in sent["text"]
+    assert "Historical opportunities: 3" in sent["text"]
+    assert "- [BOUNTY] <https://immunefi.com/bounty/arb|Arbitrum Security Bounty> | Score: 8.6 | Source: Rss" in sent["text"]
     assert "<https://x.com/buildonbase/status/1|twitter_buildonbase>" not in sent["text"]

@@ -24,7 +24,7 @@ st.caption(f"Last updated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M 
 # --- Sidebar filters ---
 st.sidebar.header("Filters")
 event_type_filter = st.sidebar.multiselect(
-    "Type", ["grant", "hackathon", "bounty"], default=["grant", "hackathon", "bounty"]
+    "Type", ["grant", "hackathon"], default=["grant", "hackathon"]
 )
 ecosystem_filter = st.sidebar.text_input("Ecosystem (e.g., sui, ethereum)", "")
 min_score = st.sidebar.slider("Min Score", 0.0, 10.0, 5.0, 0.5)
@@ -86,9 +86,8 @@ with tab1:
             col1.metric("Total Shown", len(events))
             col2.metric("Avg Score", f"{sum(e.final_score or 0 for e in events) / max(len(events), 1):.1f}")
             col3.metric("Verified %", f"{sum(1 for e in events if e.is_verified) / max(len(events), 1) * 100:.0f}%")
-            col4.metric("Grants/Bounties/Hacks",
+            col4.metric("Grants/Hacks",
                         f"{sum(1 for e in events if e.event_type=='grant')}/"
-                        f"{sum(1 for e in events if e.event_type=='bounty')}/"
                         f"{sum(1 for e in events if e.event_type=='hackathon')}")
     finally:
         db.close()

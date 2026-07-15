@@ -10,7 +10,7 @@ sources = [
     and s.get("topic", "general") == "news"
 ][:5]
 
-print("TAVILY_API_KEY configured:", bool(settings.TAVILY_API_KEY))
+print("TAVILY_API_KEYS configured:", bool(settings.TAVILY_API_KEYS))
 print("enabled_tavily_news_sources:", len(sources))
 
 for src in sources:

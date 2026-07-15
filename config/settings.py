@@ -45,9 +45,13 @@ class Settings:
 
     # Search / discovery
     GITHUB_TOKEN: str = os.getenv("GITHUB_TOKEN", "")
-    TAVILY_API_KEY: str = os.getenv("TAVILY_API_KEY", "")
+    TAVILY_API_KEYS: list[str] = [
+        k.strip()
+        for k in os.getenv("TAVILY_API_KEYS", os.getenv("TAVILY_API_KEY", "")).split(",")
+        if k.strip()
+    ]
     TAVILY_SUCCESS_COOLDOWN_MINUTES: int = int(os.getenv("TAVILY_SUCCESS_COOLDOWN_MINUTES", "1440"))
-    TAVILY_MAX_SOURCES_PER_RUN: int = int(os.getenv("TAVILY_MAX_SOURCES_PER_RUN", "1"))
+    TAVILY_MAX_SOURCES_PER_RUN: int = int(os.getenv("TAVILY_MAX_SOURCES_PER_RUN", "20"))
 
     # Twitter (Twikit)
     TWITTER_AUTH_INFO_1: str = os.getenv("TWITTER_AUTH_INFO_1", "")
@@ -55,7 +59,7 @@ class Settings:
     TWITTER_PASSWORD: str = os.getenv("TWITTER_PASSWORD", "")
     TWITTER_TOTP_SECRET: str = os.getenv("TWITTER_TOTP_SECRET", "")
     TWITTER_COOKIES_FILE: str = os.getenv("TWITTER_COOKIES_FILE", ".twitter-cookies.json")
-    SOCIAL_WATCH_INTERVAL_MINUTES: int = int(os.getenv("SOCIAL_WATCH_INTERVAL_MINUTES", "15"))
+    SOCIAL_WATCH_INTERVAL_MINUTES: int = int(os.getenv("SOCIAL_WATCH_INTERVAL_MINUTES", "240"))
     TWITTER_FETCH_COUNT: int = int(os.getenv("TWITTER_FETCH_COUNT", "20"))
 
     # App
@@ -64,7 +68,16 @@ class Settings:
     DAILY_SUMMARY_ENABLED: bool = os.getenv("DAILY_SUMMARY_ENABLED", "true").lower() == "true"
     DAILY_SUMMARY_CRON: str = os.getenv("DAILY_SUMMARY_CRON", "55 23 * * *")
     SLIDING_WINDOW_DAYS: int = 14
-    SIMILARITY_THRESHOLD: float = 0.85
+    SIMILARITY_THRESHOLD: float = 0.75
+
+    # Staleness / time-window enforcement
+    # Items published more than this many days ago without ANY deadline are dropped
+    # (only applies to discovery sources; official sources are always kept).
+    STALE_MAX_AGE_DAYS: int = int(os.getenv("STALE_MAX_AGE_DAYS", "60"))
+    # Secondary date extraction timeout when scraping a source URL.
+    DATE_SCRAPE_TIMEOUT_SECONDS: int = int(os.getenv("DATE_SCRAPE_TIMEOUT_SECONDS", "15"))
+    # Max chars sent to LLM for lightweight date extraction from a scraped page.
+    DATE_SCRAPE_MAX_CHARS: int = int(os.getenv("DATE_SCRAPE_MAX_CHARS", "4000"))
 
     # Scoring weights
     SCORE_WEIGHTS: dict = {

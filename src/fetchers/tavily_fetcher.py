@@ -33,23 +33,43 @@ class TavilyFetcher(BaseFetcher):
 
     source_type = "tavily_search"
 
-    _client_instance = None  # shared TavilyClient across all Tavily fetchers
+    _client_instance = None  # shared TavilyClient (current active key)
+    _active_key_index: int = -1  # which key index is currently in use
 
-    def _get_client(self):
+    @classmethod
+    def _get_client(cls, force_rotate: bool = False):
         if TavilyClient is None:
             raise FetchError("tavily-python is not installed")
-        if not settings.TAVILY_API_KEY:
-            raise FetchError("TAVILY_API_KEY not set")
-        if TavilyFetcher._client_instance is None:
-            TavilyFetcher._client_instance = TavilyClient(api_key=settings.TAVILY_API_KEY)
-        return TavilyFetcher._client_instance
+
+        keys = settings.TAVILY_API_KEYS
+        if not keys:
+            raise FetchError("TAVILY_API_KEYS not set (comma-separated list)")
+
+        if not force_rotate and cls._client_instance is not None:
+            return cls._client_instance
+
+        # Start from next key (round-robin)
+        start_idx = (cls._active_key_index + 1) % len(keys)
+
+        for offset in range(len(keys)):
+            idx = (start_idx + offset) % len(keys)
+            api_key = keys[idx]
+            try:
+                client = TavilyClient(api_key=api_key)
+                cls._client_instance = client
+                cls._active_key_index = idx
+                logger.info(f"TavilyClient using key #{idx + 1}/{len(keys)}")
+                return client
+            except Exception as e:
+                logger.warning(f"Tavily key #{idx + 1} init failed: {e}")
+                continue
+
+        raise FetchError(f"All {len(keys)} Tavily API keys failed to initialize")
 
     def fetch(self) -> List[FetchedItem]:
         query = self.config.get("query", "")
         if not query:
             raise FetchError(f"Tavily source '{self.source_name}' has no query")
-
-        client = self._get_client()
 
         max_results = int(self.config.get("max_results", 5))
         search_depth = self.config.get("search_depth", "advanced")
@@ -64,11 +84,28 @@ class TavilyFetcher(BaseFetcher):
         if topic == "news":
             search_kwargs["days"] = int(self.config.get("days", 15))
 
-        try:
-            response = client.search(**search_kwargs)
-        except Exception as e:
-            logger.error(f"Tavily search failed for {self.source_name}: {e}")
-            raise FetchError(str(e)) from e
+        keys = settings.TAVILY_API_KEYS
+        max_attempts = len(keys) if keys else 1
+        last_error = None
+
+        for attempt in range(max_attempts):
+            client = self._get_client(force_rotate=(attempt > 0))
+            try:
+                response = client.search(**search_kwargs)
+                break  # success — exit retry loop
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"Tavily search attempt {attempt + 1}/{max_attempts} "
+                    f"failed for {self.source_name}: {e}"
+                )
+                if attempt < max_attempts - 1:
+                    continue  # rotate key and retry
+        else:
+            logger.error(
+                f"Tavily search failed after {max_attempts} attempts for {self.source_name}"
+            )
+            raise FetchError(str(last_error)) from last_error
 
         items = []
         for result in response.get("results", []):

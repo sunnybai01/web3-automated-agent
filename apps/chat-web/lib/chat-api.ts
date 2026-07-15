@@ -23,3 +23,15 @@ export async function getJson(path: string) {
 
   return response.json();
 }
+
+export async function deleteJson(path: string) {
+  const response = await fetch(path, {
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+
+  return response.json();
+}

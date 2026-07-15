@@ -130,7 +130,6 @@ export type DashboardOpportunityMetrics = {
   avg_score: number;
   verified_percent: number;
   grants: number;
-  bounties: number;
   hackathons: number;
   official: number;
   discovery: number;
@@ -139,6 +138,12 @@ export type DashboardOpportunityMetrics = {
 export type DashboardOpportunitiesResponse = {
   metrics: DashboardOpportunityMetrics;
   items: DashboardOpportunityItem[];
+};
+
+export type DeleteOpportunityResponse = {
+  status: string;
+  event_id: number;
+  deleted: boolean;
 };
 
 export type DashboardSourceHealthItem = {
@@ -215,5 +220,19 @@ export type DailySummaryTriggerResponse = {
   status: string;
   summary_date: string;
   slack_ts: string;
+  error: string;
+};
+
+export type TavilyUnlockResponse = {
+  status: string;
+  unlocked_count: number;
+  message: string;
+};
+
+export type DedupResetResponse = {
+  status: string;
+  vectors_cleared: boolean;
+  signals_cleared: number;
+  message: string;
   error: string;
 };

@@ -61,7 +61,7 @@ export function getScheduleStatusMap(
   const completed = new Map(
     (status?.schedules ?? []).map((item) => [item.schedule, item])
   );
-  const ordered = ["grant_hackathon", "bounty"];
+  const ordered = ["grant_hackathon"];
 
   return ordered.map((schedule) => {
     const result = completed.get(schedule) ?? null;

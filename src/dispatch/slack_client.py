@@ -49,6 +49,12 @@ def _format_slack_link(url: str, label: str) -> str:
     return f"<{url}|{label}>"
 
 
+def _format_counter_items(items: Dict[str, Any]) -> str:
+    if not items:
+        return "None"
+    return ", ".join(f"{key}: {value}" for key, value in items.items())
+
+
 class SlackDispatcher:
     """Pushes structured opportunities to Slack via Block Kit."""
 
@@ -246,6 +252,8 @@ class SlackDispatcher:
             return None
 
         totals = summary.get("totals", {})
+        today_scan_stats = summary.get("today_scan_stats", {}) or {}
+        historical_high_score = summary.get("historical_high_score", {}) or {}
         source_names = summary.get("new_event_sources", []) or []
         new_events = summary.get("new_events", []) or []
         summary_date = summary.get("summary_date", "unknown-date")
@@ -271,6 +279,36 @@ class SlackDispatcher:
                 )
         else:
             lines.append("No new qualified opportunities today.")
+
+        lines.extend(
+            [
+                "",
+                "Today's new content stats",
+                f"Total new events: {today_scan_stats.get('total_new_events', 0)}",
+                f"By event type: {_format_counter_items(today_scan_stats.get('by_event_type', {}))}",
+                f"By source type: {_format_counter_items(today_scan_stats.get('by_source_type', {}))}",
+                "",
+                f"Historical opportunities: {historical_high_score.get('total_count', 0)}",
+                f"By event type: {_format_counter_items(historical_high_score.get('by_event_type', {}))}",
+            ]
+        )
+
+        recent_high_score_events = historical_high_score.get("recent_events", []) or []
+        if recent_high_score_events:
+            lines.append("Recent opportunities:")
+            for event in recent_high_score_events:
+                title = event.get("title", "Untitled")
+                source_type = _format_source_type(str(event.get("source_type") or ""))
+                source_url = event.get("source_url") or event.get("application_url") or ""
+                title_text = _format_slack_link(source_url, title) if source_url else title
+                score_value = event.get("final_score")
+                score_text = f"{score_value:.1f}" if isinstance(score_value, (int, float)) else "N/A"
+                source_suffix = f" | Source: {source_type}" if source_type != "Unknown" else ""
+                lines.append(
+                    f"- [{str(event.get('event_type') or 'other').upper()}] {title_text} | Score: {score_text}{source_suffix}"
+                )
+        else:
+            lines.append("No historical opportunities yet.")
 
         text = "\n".join(lines)
 

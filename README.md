@@ -40,7 +40,7 @@
 ```mermaid
 flowchart TD
   A[APScheduler 触发任务\ngrant_hackathon / bounty / social_watch] --> B[run_pipeline schedule]
-  B --> C[加载 source 配置\nconfig/sources.yaml\n+ approved chains.candidates.yaml]
+  B --> C[加载 source 配置\nconfig/sources.yaml\n+ optional approved chains.candidates.yaml]
   C --> D[build_registry\n按 fetch_method 注册 Fetcher]
   D --> E[抓取前裁剪\n按 schedule 过滤 source\nTavily budget 选择\n冷却/失败 source 跳过]
   E --> F[并行遍历可用 source\nRSS / GitHub Search / Web Scraper / Tavily / Twitter]
@@ -91,7 +91,8 @@ cp .env.example .env
 - 向量库：`CHROMA_HOST` `CHROMA_PORT`
 - LLM：`DEEPSEEK_API_KEY` / `QWEN_API_KEY` / `GEMINI_API_KEY`
 - Slack：`SLACK_BOT_TOKEN` `SLACK_CHANNEL_ID`
-- 搜索：`GITHUB_TOKEN` `TAVILY_API_KEY` `DEFILLAMA_CHAINS_URL`
+- 搜索：`GITHUB_TOKEN` `TAVILY_API_KEYS` `DEFILLAMA_CHAINS_URL`
+- DefiLlama 候选链开关：`DEFILLAMA_SYNC_ENABLED` `DEFILLAMA_SYNC_CRON` `DEFILLAMA_SYNC_TOP_N`
 - Tavily 调度控制：`TAVILY_SUCCESS_COOLDOWN_MINUTES` `TAVILY_MAX_SOURCES_PER_RUN`
 - Twitter：`TWITTER_AUTH_INFO_1` `TWITTER_AUTH_INFO_2` `TWITTER_PASSWORD` `TWITTER_TOTP_SECRET` `TWITTER_COOKIES_FILE`
 - 运行：`LOG_LEVEL` `HEARTBEAT_INTERVAL_MINUTES` `SOCIAL_WATCH_INTERVAL_MINUTES` `TWITTER_FETCH_COUNT`
@@ -101,6 +102,11 @@ cp .env.example .env
 
 - `TAVILY_SUCCESS_COOLDOWN_MINUTES=5760`：同一个 Tavily source 成功执行后，4 天内不重复搜索
 - `TAVILY_MAX_SOURCES_PER_RUN=1`：每个 schedule 每轮最多只执行 1 个 Tavily source，按“最久未抓取优先”轮转
+
+当前 DefiLlama 链路默认值：
+
+- `DEFILLAMA_SYNC_ENABLED=false`：默认停用候选链同步与动态 Tavily 扩源
+- 仅当显式设置为 `true` 时，`chains.candidates.yaml` 才会参与 runtime source 扩展，并注册 `defillama_candidate_sync` job
 
 注意：修改 `.env` 后，若容器已在运行，需要重建应用容器使新环境生效。
 
@@ -143,6 +149,7 @@ docker compose up -d --force-recreate agent-app
 - `social_watch`：每 `SOCIAL_WATCH_INTERVAL_MINUTES` 分钟
 - `heartbeat`：每 `HEARTBEAT_INTERVAL_MINUTES` 分钟
 - `daily_summary`：每天按 `DAILY_SUMMARY_CRON` 发送 Slack 日报（默认 23:55，Asia/Shanghai）
+- `defillama_candidate_sync`：默认不注册；仅当 `DEFILLAMA_SYNC_ENABLED=true` 时按 `DEFILLAMA_SYNC_CRON` 注册
 
 启动时会先立即跑一次：
 
@@ -282,15 +289,17 @@ Default endpoint:
 DEFILLAMA_CHAINS_URL=https://api.llama.fi/v2/chains
 ```
 
-Scheduled refresh is also enabled in the main agent runtime by default:
+Scheduled refresh is disabled in the main agent runtime by default:
 
 ```bash
-DEFILLAMA_SYNC_ENABLED=true
+DEFILLAMA_SYNC_ENABLED=false
 DEFILLAMA_SYNC_CRON="30 6 * * *"
 DEFILLAMA_SYNC_TOP_N=50
 ```
 
 The cron is interpreted in the app scheduler timezone (`Asia/Shanghai`).
+
+If you need to roll this path back on, set `DEFILLAMA_SYNC_ENABLED=true` and recreate the app container/process.
 
 This command updates `config/chains.candidates.yaml` only. It does not auto-enable chains in `config/chains.yaml`.
 

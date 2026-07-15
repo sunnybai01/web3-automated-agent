@@ -5,11 +5,15 @@ import time
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
+from zoneinfo import ZoneInfo
 
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 import httpx
 
 logger = logging.getLogger(__name__)
+
+# Shanghai timezone for Tavily midnight-bound cooldown
+_SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
 
 
 @dataclass
@@ -79,10 +83,15 @@ def get_fetch_skip_reason(
 ) -> Optional[str]:
     """Return a short skip reason when a source is cooling down.
 
-    The caller can use this to suppress repeated fetches for sources that are
-    currently rate limited or already marked down.
+    Cooldown strategies by fetch method:
+    - tavily_search: locked after each successful fetch, auto-unlocks at
+      next midnight (Asia/Shanghai).  Rate-limit and failure cooldowns
+      still apply as usual.
+    - all others: time-based cooldown configured via success_cooldown_minutes,
+      rate_limit_cooldown_minutes, and failure_cooldown_minutes.
     """
     now = now or dt.datetime.now(dt.timezone.utc)
+    fetch_method = config.get("fetch_method", "")
 
     if source_state is not None and getattr(source_state, "cooldown_until", None) is not None:
         if now < source_state.cooldown_until:
@@ -105,6 +114,22 @@ def get_fetch_skip_reason(
         if now < retry_at:
             return "failed_source_cooldown"
 
+    # ---- Tavily: midnight-bound cooldown ----
+    # A Tavily source that already fetched successfully today is locked
+    # until the next midnight (Asia/Shanghai).  The midnight unlock job
+    # resets last_success_at → NULL to release all Tavily sources at once.
+    if fetch_method == "tavily_search":
+        if getattr(health, "last_success_at", None) is not None:
+            # Compute the next midnight in Asia/Shanghai (UTC+8)
+            shanghai_now = now.astimezone(_SHANGHAI_TZ)
+            today_midnight_shanghai = shanghai_now.replace(
+                hour=0, minute=0, second=0, microsecond=0,
+            )
+            if health.last_success_at >= today_midnight_shanghai:
+                return "tavily_cooldown_until_midnight"
+        return None
+
+    # ---- Standard time-based success cooldown ----
     success_cooldown = int(config.get("success_cooldown_minutes", 0) or 0)
     if success_cooldown > 0 and getattr(health, "last_success_at", None) is not None:
         retry_at = health.last_success_at + dt.timedelta(minutes=success_cooldown)

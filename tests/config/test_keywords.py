@@ -12,9 +12,7 @@ def test_repo_keywords_include_requested_twitter_watch_terms() -> None:
 
     assert "grant program" in keywords["grant"]
     assert "RFPs" in keywords["grant"]
-    assert "bounties" in keywords["bounty"]
-    assert "bounty pool" in keywords["bounty"]
-    assert "task" in keywords["bounty"]
+    assert "bounty" not in keywords
     assert "builder" in keywords["hackathon"]
     assert "builders" in keywords["hackathon"]
     assert "cohorts" in keywords["hackathon"]

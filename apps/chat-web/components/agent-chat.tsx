@@ -1,19 +1,25 @@
 "use client";
 
 import { useFrontendTool } from "@copilotkit/react-core/v2";
-import { CopilotChat } from "@copilotkit/react-ui";
 import {
   Activity,
-  Database,
+  CheckCircle2,
+  ChevronRight,
+  CircleDashed,
+  ExternalLink,
+  MessageSquare,
+  RotateCcw,
+  SearchCheck,
   ShieldCheck,
-  Sparkles,
-  Telescope,
+  Trash2,
+  Unlock,
+  XCircle,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import { runMixedModeVerification } from "../lib/actions";
-import { getJson, postJson } from "../lib/chat-api";
+import { deleteJson, getJson, postJson } from "../lib/chat-api";
 import {
   getManualScanProgressLabel,
   getScheduleStatusMap,
@@ -25,6 +31,8 @@ import type {
   DailySummaryTriggerResponse,
   DashboardOpportunitiesResponse,
   DashboardOpportunityItem,
+  DeleteOpportunityResponse,
+  DedupResetResponse,
   InvestigationResponse,
   DashboardScheduleLogsResponse,
   DashboardSourceHealthResponse,
@@ -34,30 +42,20 @@ import type {
   ProposeOptionsResponse,
   SelectTargetsRequest,
   SelectTargetsResponse,
+  TavilyUnlockResponse,
   VerifyResponse,
 } from "../types/chat";
 import CopilotDrawer from "./copilot-drawer";
 import ResultPanels from "./result-panels";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "./ui/card";
-import { Input } from "./ui/input";
+import { Card, CardContent, CardHeader } from "./ui/card";
+import { Select } from "./ui/select";
 
 type DashboardTab = "opportunities" | "sourceHealth" | "scheduleLogs";
 
-type DashboardFilters = {
-  eventTypes: string[];
-  ecosystem: string;
-  minScore: string;
-  days: string;
-  sourceTrust: "all" | "official" | "discovery";
-};
+type EventTypeFilter = "grant" | "hackathon" | "all";
+type SourceTrustFilter = "all" | "official" | "discovery";
 
 const analysisToolSchema = z.object({
   eventId: z.number().optional(),
@@ -109,6 +107,38 @@ function normalizeDateValue(value?: string) {
   return trimmed;
 }
 
+export function removeOpportunityFromState(
+  dashboardData: DashboardOpportunitiesResponse | null,
+  selectedOpportunity: DashboardOpportunityItem | null,
+  deletedId: number
+) {
+  if (!dashboardData) {
+    return {
+      dashboardData,
+      selectedOpportunity:
+        selectedOpportunity?.id === deletedId ? null : selectedOpportunity,
+    };
+  }
+
+  const items = dashboardData.items.filter((item) => item.id !== deletedId);
+  const nextSelected =
+    selectedOpportunity?.id === deletedId
+      ? (items[0] ?? null)
+      : selectedOpportunity;
+
+  return {
+    dashboardData: {
+      ...dashboardData,
+      metrics: {
+        ...dashboardData.metrics,
+        total_shown: items.length,
+      },
+      items,
+    },
+    selectedOpportunity: nextSelected,
+  };
+}
+
 export function normalizeAnalysisTargetInput(
   input: {
     eventId?: number;
@@ -149,13 +179,8 @@ export function normalizeAnalysisTargetInput(
 export default function AgentChat() {
   const resultsSectionRef = useRef<HTMLDivElement | null>(null);
   const [activeTab, setActiveTab] = useState<DashboardTab>("opportunities");
-  const [filters, setFilters] = useState<DashboardFilters>({
-    eventTypes: ["grant", "hackathon", "bounty"],
-    ecosystem: "",
-    minScore: "5.0",
-    days: "14",
-    sourceTrust: "all",
-  });
+  const [typeFilter, setTypeFilter] = useState<EventTypeFilter>("all");
+  const [sourceFilter, setSourceFilter] = useState<SourceTrustFilter>("all");
   const [dashboardData, setDashboardData] =
     useState<DashboardOpportunitiesResponse | null>(null);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
@@ -176,7 +201,7 @@ export default function AgentChat() {
     useState<DashboardOpportunityItem | null>(null);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [result, setResult] = useState<MixedModeResult | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
+  const [verifyingEventId, setVerifyingEventId] = useState<number | null>(null);
   const [investigation, setInvestigation] =
     useState<InvestigationResponse | null>(null);
   const [isInvestigating, setIsInvestigating] = useState(false);
@@ -184,12 +209,25 @@ export default function AgentChat() {
     useState<ManualScanStatusResponse | null>(null);
   const [manualScanError, setManualScanError] = useState<string | null>(null);
   const [isManualScanStarting, setIsManualScanStarting] = useState(false);
+  const [deletingEventId, setDeletingEventId] = useState<number | null>(null);
   const [dailySummaryStatus, setDailySummaryStatus] =
     useState<DailySummaryTriggerResponse | null>(null);
   const [dailySummaryError, setDailySummaryError] = useState<string | null>(
     null
   );
   const [isDailySummarySending, setIsDailySummarySending] = useState(false);
+  const [isUnlockingTavily, setIsUnlockingTavily] = useState(false);
+  const [tavilyUnlockResult, setTavilyUnlockResult] = useState<string | null>(
+    null
+  );
+  const [isResettingDedup, setIsResettingDedup] = useState(false);
+  const [dedupResetResult, setDedupResetResult] = useState<string | null>(null);
+
+  // Show result notifications for 6 seconds then auto-dismiss
+  function showResult(setter: (v: string | null) => void, message: string) {
+    setter(message);
+    setTimeout(() => setter(null), 6000);
+  }
 
   const api = {
     selectTargets: async (
@@ -251,11 +289,8 @@ export default function AgentChat() {
         scheduleLogs: scheduleLogsError,
       },
       filters: {
-        event_types: filters.eventTypes,
-        ecosystem: filters.ecosystem,
-        min_score: Number(filters.minScore || "5.0"),
-        days: Number(filters.days || "14"),
-        source_trust: filters.sourceTrust,
+        type: typeFilter,
+        source_trust: sourceFilter,
       },
       counts: activeCounts,
       selectedOpportunity: selectedOpportunity
@@ -281,11 +316,8 @@ export default function AgentChat() {
     activeTab,
     dashboardData,
     dashboardError,
-    filters.days,
-    filters.ecosystem,
-    filters.eventTypes,
-    filters.minScore,
-    filters.sourceTrust,
+    typeFilter,
+    sourceFilter,
     isDashboardLoading,
     isScheduleLogsLoading,
     isSourceHealthLoading,
@@ -298,21 +330,12 @@ export default function AgentChat() {
   ]);
 
   async function loadOpportunitiesData() {
-    const query = new URLSearchParams();
-    for (const eventType of filters.eventTypes) {
-      query.append("event_types", eventType);
-    }
-    query.set("ecosystem", filters.ecosystem);
-    query.set("min_score", filters.minScore || "5.0");
-    query.set("days", filters.days || "14");
-    query.set("source_trust", filters.sourceTrust);
-
     setIsDashboardLoading(true);
     setDashboardError(null);
 
     try {
       const data = (await getJson(
-        `/api/dashboard/opportunities?${query.toString()}`
+        "/api/dashboard/opportunities"
       )) as DashboardOpportunitiesResponse;
 
       setDashboardData(data);
@@ -442,6 +465,91 @@ export default function AgentChat() {
     }
   }
 
+  async function unlockTavily() {
+    setIsUnlockingTavily(true);
+    setTavilyUnlockResult(null);
+
+    try {
+      const data = (await postJson(
+        "/api/admin/tavily-unlock",
+        {}
+      )) as TavilyUnlockResponse;
+      showResult(setTavilyUnlockResult, data.message);
+    } catch (error) {
+      showResult(
+        setTavilyUnlockResult,
+        error instanceof Error ? error.message : "Unlock failed."
+      );
+    } finally {
+      setIsUnlockingTavily(false);
+    }
+  }
+
+  async function resetDedupState() {
+    setIsResettingDedup(true);
+    setDedupResetResult(null);
+
+    try {
+      const data = (await postJson(
+        "/api/admin/reset-dedup",
+        {}
+      )) as DedupResetResponse;
+      showResult(setDedupResetResult, data.message);
+    } catch (error) {
+      showResult(
+        setDedupResetResult,
+        error instanceof Error ? error.message : "Reset failed."
+      );
+    } finally {
+      setIsResettingDedup(false);
+    }
+  }
+
+  async function deleteOpportunity(item: DashboardOpportunityItem) {
+    if (deletingEventId !== null) {
+      return;
+    }
+
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(`Delete opportunity #${item.id}? This cannot be undone.`)
+    ) {
+      return;
+    }
+
+    setDeletingEventId(item.id);
+    setDashboardError(null);
+
+    try {
+      (await deleteJson(
+        `/api/dashboard/opportunities/${item.id}`
+      )) as DeleteOpportunityResponse;
+
+      const nextState = removeOpportunityFromState(
+        dashboardData,
+        selectedOpportunity,
+        item.id
+      );
+      setDashboardData(nextState.dashboardData);
+      setSelectedOpportunity(nextState.selectedOpportunity);
+      await loadOpportunitiesData();
+    } catch (error) {
+      setDashboardError(
+        error instanceof Error ? error.message : "Failed to delete opportunity."
+      );
+    } finally {
+      setDeletingEventId(null);
+    }
+  }
+
+  async function deleteSelectedOpportunity() {
+    if (!selectedOpportunity) {
+      return;
+    }
+
+    await deleteOpportunity(selectedOpportunity);
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -452,7 +560,7 @@ export default function AgentChat() {
     return () => {
       cancelled = true;
     };
-  }, [filters]);
+  }, [typeFilter, sourceFilter]);
 
   useEffect(() => {
     if (
@@ -524,13 +632,14 @@ export default function AgentChat() {
       ...override,
     };
 
-    setIsRunning(true);
+    const eventId = merged.event_id ?? null;
+    setVerifyingEventId(eventId);
     try {
       const data = await runMixedModeVerification(api, merged);
       setResult(data);
       return data;
     } finally {
-      setIsRunning(false);
+      setVerifyingEventId(null);
     }
   };
 
@@ -667,504 +776,325 @@ export default function AgentChat() {
   );
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.18),_transparent_34%),linear-gradient(180deg,_hsl(var(--background))_0%,_#f8f5ef_100%)] px-4 py-8 md:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <Card className="overflow-hidden border-border/70 bg-card/95 shadow-[0_30px_90px_-48px_rgba(15,23,42,0.48)] backdrop-blur">
-          <CardContent className="grid gap-4 p-6">
-            <div className="space-y-4">
-              <Badge className="bg-primary/12 text-primary hover:bg-primary/12">
-                Signal Room
-              </Badge>
-              <div className="space-y-2">
-                <h1 className="text-4xl font-semibold tracking-[-0.04em] md:text-5xl">
-                  Opportunity Dashboard + Copilot
-                </h1>
-                <p className="max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
-                  Browse the same core intelligence surface as Streamlit first,
-                  then use the copilot to interrogate the currently visible data
-                  or deep-dive into a selected opportunity.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.12),_transparent_40%),hsl(var(--background))] px-4 py-6 md:px-8">
+      <div className="mx-auto flex max-w-7xl flex-col gap-5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Badge className="bg-primary/12 text-primary hover:bg-primary/12 text-xs font-medium">
+              Signal Room
+            </Badge>
+            <h1 className="text-xl font-semibold tracking-[-0.03em] md:text-2xl">
+              Opportunity Pipeline
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              disabled={
+                isManualScanStarting || manualScanStatus?.status === "running"
+              }
+              onClick={() => void triggerManualScan()}
+            >
+              {isManualScanStarting
+                ? "Starting..."
+                : manualScanStatus?.status === "running"
+                  ? "Scanning"
+                  : "Run Scan"}
+            </Button>
+            <div className="mx-1 h-6 w-px bg-border/80" aria-hidden="true" />
+            <Button
+              disabled={isDailySummarySending}
+              variant="outline"
+              className="text-xs"
+              onClick={() => void triggerDailySummary()}
+            >
+              {isDailySummarySending ? "Sending..." : "Daily Summary"}
+            </Button>
+            <Button
+              disabled={isUnlockingTavily}
+              variant="outline"
+              className="text-xs"
+              onClick={() => void unlockTavily()}
+            >
+              <Unlock className="mr-1 h-3 w-3" />
+              {isUnlockingTavily ? "..." : "Tavily"}
+            </Button>
+            <Button
+              disabled={isResettingDedup}
+              variant="outline"
+              className="text-xs"
+              onClick={() => void resetDedupState()}
+            >
+              <RotateCcw className="mr-1 h-3 w-3" />
+              {isResettingDedup ? "..." : "Dedup"}
+            </Button>
+          </div>
+        </div>
 
-        <div className="space-y-6">
-          <div className="space-y-6">
-            <Card className="border-border/70 bg-card/95 shadow-sm">
-              <CardHeader>
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <CardTitle>Filters</CardTitle>
-                    <CardDescription>
-                      Mirror the Streamlit dashboard filters and keep the data
-                      surface front and center.
-                    </CardDescription>
-                  </div>
-                  <div className="flex flex-col items-end gap-2">
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <Button
-                        disabled={
-                          isManualScanStarting ||
-                          manualScanStatus?.status === "running"
+        {tavilyUnlockResult || dedupResetResult || manualScanStatus?.job_id ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-full border border-border/60 bg-card/95 px-4 py-2 text-sm shadow-sm">
+            {manualScanStatus?.job_id ? (
+              <>
+                <Badge variant="outline" className="text-xs capitalize">
+                  {manualScanStatus.status}
+                </Badge>
+                <span className="text-muted-foreground">
+                  {manualScanStatus.current_stage
+                    ? `Stage: ${manualScanStatus.current_stage}`
+                    : `Job #${manualScanStatus.job_id.slice(0, 8)}`}
+                </span>
+                <span className="tabular-nums text-xs text-muted-foreground">
+                  fetched {manualScanSummary.fetched} · new{" "}
+                  {manualScanSummary.new} · verified{" "}
+                  {manualScanSummary.verified} · pushed{" "}
+                  {manualScanSummary.pushed}
+                </span>
+              </>
+            ) : null}
+            {tavilyUnlockResult ? (
+              <span className="flex items-center gap-2 text-muted-foreground">
+                <Unlock className="h-3 w-3" />
+                {tavilyUnlockResult}
+              </span>
+            ) : null}
+            {dedupResetResult ? (
+              <span className="flex items-center gap-2 text-muted-foreground">
+                <RotateCcw className="h-3 w-3" />
+                {dedupResetResult}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="grid gap-3 md:grid-cols-5">
+          <MetricCard
+            label="Total Shown"
+            value={dashboardData?.metrics.total_shown ?? "-"}
+            icon={CircleDashed}
+          />
+          <MetricCard
+            label="Avg Score"
+            value={dashboardData?.metrics.avg_score ?? "-"}
+          />
+          <MetricCard
+            label="Verified %"
+            value={
+              dashboardData ? `${dashboardData.metrics.verified_percent}%` : "-"
+            }
+            variant="success"
+            icon={CheckCircle2}
+          />
+          <MetricCard
+            label="Grants / Hacks"
+            value={
+              dashboardData
+                ? `${dashboardData.metrics.grants}/${dashboardData.metrics.hackathons}`
+                : "-"
+            }
+          />
+          <MetricCard
+            label="Official / Discovery"
+            value={
+              dashboardData
+                ? `${dashboardData.metrics.official}/${dashboardData.metrics.discovery}`
+                : "-"
+            }
+          />
+        </div>
+
+        <Card className="border-border/70 bg-card/95 shadow-sm">
+          <CardHeader className="pb-2">
+            <div
+              className="rounded-full bg-muted/60 p-1 inline-flex gap-0.5"
+              role="tablist"
+            >
+              {(["opportunities", "sourceHealth", "scheduleLogs"] as const).map(
+                (tab) => {
+                  const labels: Record<DashboardTab, string> = {
+                    opportunities: "Opportunities",
+                    sourceHealth: "Source Health",
+                    scheduleLogs: "Schedule Logs",
+                  };
+                  return (
+                    <button
+                      key={tab}
+                      role="tab"
+                      aria-selected={activeTab === tab}
+                      onClick={() => handleTabChange(tab)}
+                      className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
+                        activeTab === tab
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {labels[tab]}
+                    </button>
+                  );
+                }
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {activeTab === "opportunities" ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold text-foreground">
+                    {dashboardData?.items.length ?? 0} opportunities
+                  </h2>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-xs text-muted-foreground">
+                        Type
+                      </label>
+                      <Select
+                        className="h-8 w-28 rounded-full text-xs"
+                        value={typeFilter}
+                        onChange={(e) =>
+                          setTypeFilter(e.target.value as EventTypeFilter)
                         }
-                        onClick={() => void triggerManualScan()}
                       >
-                        {isManualScanStarting
-                          ? "Starting Scan..."
-                          : manualScanStatus?.status === "running"
-                            ? "Scan Running..."
-                            : "Run Scan"}
-                      </Button>
-                      <Button
-                        disabled={isDailySummarySending}
-                        variant="outline"
-                        onClick={() => void triggerDailySummary()}
+                        <option value="all">All</option>
+                        <option value="grant">Grant</option>
+                        <option value="hackathon">Hackathon</option>
+                      </Select>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <label className="text-xs text-muted-foreground">
+                        Source
+                      </label>
+                      <Select
+                        className="h-8 w-28 rounded-full text-xs"
+                        value={sourceFilter}
+                        onChange={(e) =>
+                          setSourceFilter(e.target.value as SourceTrustFilter)
+                        }
                       >
-                        {isDailySummarySending
-                          ? "Sending Summary..."
-                          : "Send Daily Summary"}
-                      </Button>
+                        <option value="all">All</option>
+                        <option value="official">Official</option>
+                        <option value="discovery">Discovery</option>
+                      </Select>
                     </div>
-                    <Badge variant="outline">{manualScanProgressLabel}</Badge>
                   </div>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                {dailySummaryError ? (
+
+                {dashboardError ? (
                   <EmptyState
-                    title="Daily summary send failed"
-                    description={dailySummaryError}
-                    icon={<Telescope className="h-5 w-5 text-primary" />}
+                    title="Dashboard load failed"
+                    description={dashboardError}
                   />
-                ) : dailySummaryStatus ? (
-                  <div className="rounded-2xl border border-border/70 bg-background/70 p-4 text-sm text-muted-foreground">
-                    <div className="flex flex-wrap items-center justify-between gap-3 text-foreground">
-                      <span className="font-medium">Daily Summary</span>
-                      <Badge variant="outline">
-                        {dailySummaryStatus.status}
-                      </Badge>
-                    </div>
-                    <p className="mt-2">
-                      Summary date: {dailySummaryStatus.summary_date || "-"}
-                    </p>
-                    {dailySummaryStatus.slack_ts ? (
-                      <p className="mt-1">
-                        Slack ts: {dailySummaryStatus.slack_ts}
-                      </p>
-                    ) : null}
-                    {dailySummaryStatus.error ? (
-                      <p className="mt-1 text-rose-700">
-                        Error: {dailySummaryStatus.error}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                {manualScanError ? (
+                ) : isDashboardLoading ? (
                   <EmptyState
-                    title="Manual scan status unavailable"
-                    description={manualScanError}
-                    icon={<Activity className="h-5 w-5 text-primary" />}
+                    title="Loading opportunities"
+                    description="Fetching the current filtered opportunity set..."
                   />
-                ) : manualScanStatus?.job_id ? (
-                  <div className="rounded-2xl border border-border/70 bg-background/70 p-4 text-sm text-muted-foreground">
-                    <div className="flex flex-wrap items-center justify-between gap-3 text-foreground">
-                      <span className="font-medium">Manual Scan Status</span>
-                      <Badge variant="outline">{manualScanStatus.status}</Badge>
-                    </div>
-                    <p className="mt-2">
-                      Job #{manualScanStatus.job_id.slice(0, 8)}
-                      {manualScanStatus.started_at
-                        ? ` started at ${new Date(manualScanStatus.started_at).toLocaleString()}`
-                        : ""}
-                    </p>
-                    {manualScanStatus.current_stage ? (
-                      <p className="mt-1">
-                        Current stage: {manualScanStatus.current_stage}
-                      </p>
-                    ) : null}
-                    {manualScanStatus.error ? (
-                      <p className="mt-1 text-rose-700">
-                        Error: {manualScanStatus.error}
-                      </p>
-                    ) : null}
-                    <div className="mt-4 grid gap-3 sm:grid-cols-4">
-                      <div className="rounded-2xl border border-border/60 bg-card px-3 py-2">
-                        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                          Fetched
-                        </p>
-                        <p className="mt-1 text-lg font-semibold text-foreground">
-                          {manualScanSummary.fetched}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-border/60 bg-card px-3 py-2">
-                        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                          New
-                        </p>
-                        <p className="mt-1 text-lg font-semibold text-foreground">
-                          {manualScanSummary.new}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-border/60 bg-card px-3 py-2">
-                        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                          Verified
-                        </p>
-                        <p className="mt-1 text-lg font-semibold text-foreground">
-                          {manualScanSummary.verified}
-                        </p>
-                      </div>
-                      <div className="rounded-2xl border border-border/60 bg-card px-3 py-2">
-                        <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                          Pushed
-                        </p>
-                        <p className="mt-1 text-lg font-semibold text-foreground">
-                          {manualScanSummary.pushed}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      {manualScanSchedules.map((item) => (
-                        <div
-                          key={item.schedule}
-                          className="rounded-2xl border border-border/60 bg-card px-3 py-3"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="font-medium text-foreground">
-                              {item.schedule === "grant_hackathon"
-                                ? "Grant + Hackathon"
-                                : "Bounty"}
-                            </p>
-                            <Badge variant="outline">{item.status}</Badge>
-                          </div>
-                          {item.result ? (
-                            <p className="mt-2 text-xs leading-5">
-                              fetched {item.result.fetched} · new{" "}
-                              {item.result.new} · verified{" "}
-                              {item.result.verified} · pushed{" "}
-                              {item.result.pushed}
-                            </p>
-                          ) : item.status === "running" ? (
-                            <p className="mt-2 text-xs leading-5">
-                              Currently processing this schedule.
-                            </p>
-                          ) : item.status === "pending" ? (
-                            <p className="mt-2 text-xs leading-5">
-                              Waiting for the previous schedule to finish.
-                            </p>
-                          ) : (
-                            <p className="mt-2 text-xs leading-5">
-                              No results yet for this schedule.
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                <div className="space-y-3">
-                  <span className="text-sm font-medium text-foreground">
-                    Type
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { label: "Grant", value: "grant" },
-                      { label: "Hackathon", value: "hackathon" },
-                      { label: "Bounty", value: "bounty" },
-                    ].map((option) => {
-                      const enabled = filters.eventTypes.includes(option.value);
-                      return (
-                        <Button
-                          key={option.value}
-                          variant={enabled ? "default" : "outline"}
-                          className="rounded-full"
-                          onClick={() => {
-                            setFilters((previous) => ({
-                              ...previous,
-                              eventTypes: enabled
-                                ? previous.eventTypes.filter(
-                                    (value) => value !== option.value
-                                  )
-                                : [...previous.eventTypes, option.value],
-                            }));
-                          }}
-                        >
-                          {option.label}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="space-y-2">
-                    <label
-                      className="text-sm font-medium text-foreground"
-                      htmlFor="ecosystem"
-                    >
-                      Ecosystem
-                    </label>
-                    <Input
-                      id="ecosystem"
-                      value={filters.ecosystem}
-                      onChange={(event) =>
-                        setFilters((previous) => ({
-                          ...previous,
-                          ecosystem: event.target.value,
-                        }))
-                      }
-                      placeholder="sui, ethereum"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label
-                      className="text-sm font-medium text-foreground"
-                      htmlFor="minScore"
-                    >
-                      Min Score
-                    </label>
-                    <Input
-                      id="minScore"
-                      type="number"
-                      value={filters.minScore}
-                      onChange={(event) =>
-                        setFilters((previous) => ({
-                          ...previous,
-                          minScore: event.target.value,
-                        }))
-                      }
-                      placeholder="5.0"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label
-                      className="text-sm font-medium text-foreground"
-                      htmlFor="days"
-                    >
-                      Last N Days
-                    </label>
-                    <Input
-                      id="days"
-                      type="number"
-                      value={filters.days}
-                      onChange={(event) =>
-                        setFilters((previous) => ({
-                          ...previous,
-                          days: event.target.value,
-                        }))
-                      }
-                      placeholder="14"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <span className="text-sm font-medium text-foreground">
-                    Source Trust
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {[
-                      { label: "All", value: "all" },
-                      { label: "Official", value: "official" },
-                      { label: "Discovery", value: "discovery" },
-                    ].map((option) => {
-                      const enabled = filters.sourceTrust === option.value;
-                      return (
-                        <Button
-                          key={option.value}
-                          variant={enabled ? "default" : "outline"}
-                          className="rounded-full"
-                          onClick={() =>
-                            setFilters((previous) => ({
-                              ...previous,
-                              sourceTrust:
-                                option.value as DashboardFilters["sourceTrust"],
-                            }))
-                          }
-                        >
-                          {option.label}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <div className="grid gap-4 md:grid-cols-5">
-              <MetricCard
-                label="Total Shown"
-                value={dashboardData?.metrics.total_shown ?? "-"}
-              />
-              <MetricCard
-                label="Avg Score"
-                value={dashboardData?.metrics.avg_score ?? "-"}
-              />
-              <MetricCard
-                label="Verified %"
-                value={
-                  dashboardData
-                    ? `${dashboardData.metrics.verified_percent}%`
-                    : "-"
-                }
-              />
-              <MetricCard
-                label="Grants / Bounties / Hacks"
-                value={
-                  dashboardData
-                    ? `${dashboardData.metrics.grants}/${dashboardData.metrics.bounties}/${dashboardData.metrics.hackathons}`
-                    : "-"
-                }
-              />
-              <MetricCard
-                label="Official / Discovery"
-                value={
-                  dashboardData
-                    ? `${dashboardData.metrics.official}/${dashboardData.metrics.discovery}`
-                    : "-"
-                }
-              />
-            </div>
-
-            <Card className="border-border/70 bg-card/95 shadow-sm">
-              <CardHeader className="pb-3">
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant={
-                      activeTab === "opportunities" ? "default" : "outline"
-                    }
-                    className="rounded-full"
-                    onClick={() => handleTabChange("opportunities")}
-                  >
-                    Active Opportunities
-                  </Button>
-                  <Button
-                    variant={
-                      activeTab === "sourceHealth" ? "default" : "outline"
-                    }
-                    className="rounded-full"
-                    onClick={() => handleTabChange("sourceHealth")}
-                  >
-                    Source Health
-                  </Button>
-                  <Button
-                    variant={
-                      activeTab === "scheduleLogs" ? "default" : "outline"
-                    }
-                    className="rounded-full"
-                    onClick={() => handleTabChange("scheduleLogs")}
-                  >
-                    Schedule Logs
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {activeTab === "opportunities" ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h2 className="text-lg font-semibold text-foreground">
-                          Active Opportunities
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                          Current filtered opportunity set from the dashboard
-                          API.
-                        </p>
-                      </div>
-                      <Badge variant="outline">
-                        {dashboardData?.items.length ?? 0} rows
-                      </Badge>
-                    </div>
-
-                    {dashboardError ? (
-                      <EmptyState
-                        title="Dashboard load failed"
-                        description={dashboardError}
-                      />
-                    ) : isDashboardLoading ? (
-                      <EmptyState
-                        title="Loading opportunities"
-                        description="Fetching the current filtered opportunity set..."
-                      />
-                    ) : !dashboardData?.items.length ? (
-                      <EmptyState
-                        title="No opportunities match your filters"
-                        description="Adjust the current filter set to broaden the result window."
-                      />
-                    ) : (
-                      <>
-                        <div className="overflow-x-auto rounded-3xl border border-border/70">
-                          <table className="min-w-full divide-y divide-border text-sm">
-                            <thead className="bg-muted/60 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                              <tr>
-                                <th className="px-4 py-3">Score</th>
-                                <th className="px-4 py-3">Type</th>
-                                <th className="px-4 py-3">Title</th>
-                                <th className="px-4 py-3">Ecosystem</th>
-                                <th className="px-4 py-3">Amount</th>
-                                <th className="px-4 py-3">Deadline</th>
-                                <th className="px-4 py-3">Heat</th>
-                                <th className="px-4 py-3">Trust</th>
-                                <th className="px-4 py-3">Verified</th>
-                                <th className="px-4 py-3">Actions</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border bg-background/40">
-                              {dashboardData.items.map((item) => {
-                                const isSelected =
-                                  item.id === selectedOpportunity?.id;
-                                return (
-                                  <tr
-                                    key={item.id}
-                                    className={
-                                      isSelected
-                                        ? "bg-primary/8 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.18)]"
-                                        : "hover:bg-accent/50"
-                                    }
-                                  >
-                                    <td className="px-4 py-3 font-medium text-foreground">
-                                      {item.score ?? "-"}
-                                    </td>
-                                    <td className="px-4 py-3 text-muted-foreground">
-                                      {item.type}
-                                    </td>
-                                    <td className="px-4 py-3">
+                ) : !dashboardData?.items.length ? (
+                  <EmptyState
+                    title="No opportunities match your filters"
+                    description="Adjust the current filter set to broaden the result window."
+                  />
+                ) : (
+                  <>
+                    <div className="overflow-x-auto rounded-3xl border border-border/70">
+                      <table className="min-w-full divide-y divide-border text-sm">
+                        <thead className="bg-muted/60 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                          <tr>
+                            <th className="px-4 py-3">Score</th>
+                            <th className="px-4 py-3">Type</th>
+                            <th className="px-4 py-3">Title</th>
+                            <th className="px-4 py-3">Ecosystem</th>
+                            <th className="px-4 py-3">Amount</th>
+                            <th className="px-4 py-3">Deadline</th>
+                            <th className="px-4 py-3">Heat</th>
+                            <th className="px-4 py-3">Trust</th>
+                            <th className="px-4 py-3">Verified</th>
+                            <th className="px-4 py-3">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border bg-background/40">
+                          {dashboardData.items
+                            .filter((item) => {
+                              if (
+                                typeFilter !== "all" &&
+                                item.type.toLowerCase() !== typeFilter
+                              )
+                                return false;
+                              if (
+                                sourceFilter !== "all" &&
+                                item.source_trust !== sourceFilter
+                              )
+                                return false;
+                              return true;
+                            })
+                            .map((item) => {
+                              const isSelected =
+                                item.id === selectedOpportunity?.id;
+                              return (
+                                <tr
+                                  key={item.id}
+                                  className={`${
+                                    isSelected
+                                      ? "bg-primary/8 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.18)] border-l-[3px] border-l-primary"
+                                      : "hover:bg-accent/50 border-l-[3px] border-l-transparent"
+                                  } transition-colors`}
+                                >
+                                  <td className="px-4 py-3 font-medium text-foreground">
+                                    {item.score ?? "-"}
+                                  </td>
+                                  <td className="px-4 py-3 text-muted-foreground">
+                                    {item.type}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <button
+                                      type="button"
+                                      className="text-left font-medium text-foreground"
+                                      onClick={() =>
+                                        setSelectedOpportunity(item)
+                                      }
+                                    >
+                                      {item.title}
+                                    </button>
+                                  </td>
+                                  <td className="px-4 py-3 text-muted-foreground">
+                                    {item.ecosystem}
+                                  </td>
+                                  <td className="px-4 py-3 text-muted-foreground">
+                                    {item.amount}
+                                  </td>
+                                  <td className="px-4 py-3 text-muted-foreground">
+                                    {item.deadline}
+                                  </td>
+                                  <td className="px-4 py-3 text-muted-foreground">
+                                    {item.heat}
+                                  </td>
+                                  <td className="px-4 py-3 text-muted-foreground">
+                                    {item.source_trust === "official"
+                                      ? "Official"
+                                      : "Discovery"}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    {item.verified ? (
+                                      <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-xs font-normal">
+                                        Verified
+                                      </Badge>
+                                    ) : (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs font-normal text-muted-foreground"
+                                      >
+                                        Unverified
+                                      </Badge>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <div className="flex items-center gap-1">
                                       <button
                                         type="button"
-                                        className="text-left font-medium text-foreground"
-                                        onClick={() =>
-                                          setSelectedOpportunity(item)
-                                        }
-                                      >
-                                        {item.title}
-                                      </button>
-                                    </td>
-                                    <td className="px-4 py-3 text-muted-foreground">
-                                      {item.ecosystem}
-                                    </td>
-                                    <td className="px-4 py-3 text-muted-foreground">
-                                      {item.amount}
-                                    </td>
-                                    <td className="px-4 py-3 text-muted-foreground">
-                                      {item.deadline}
-                                    </td>
-                                    <td className="px-4 py-3 text-muted-foreground">
-                                      {item.heat}
-                                    </td>
-                                    <td className="px-4 py-3 text-muted-foreground">
-                                      {item.source_trust === "official"
-                                        ? "Official"
-                                        : "Discovery"}
-                                    </td>
-                                    <td className="px-4 py-3 text-muted-foreground">
-                                      {item.verified ? "✅" : "⚠️"}
-                                    </td>
-                                    <td className="px-4 py-3 text-muted-foreground">
-                                      <Button
-                                        variant={
-                                          isSelected ? "default" : "outline"
-                                        }
-                                        className="rounded-full"
+                                        aria-label="Ask Copilot"
+                                        title="Ask Copilot"
+                                        className={`inline-flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+                                          isSelected
+                                            ? "bg-primary text-primary-foreground"
+                                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        }`}
                                         onClick={() => {
                                           setSelectedOpportunity(item);
                                           setIsCopilotOpen(true);
@@ -1175,328 +1105,263 @@ export default function AgentChat() {
                                           });
                                         }}
                                       >
-                                        Ask Copilot
-                                      </Button>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-
-                        {selectedOpportunity ? (
-                          <Card className="border-border/70 bg-background/70">
-                            <CardHeader>
-                              <CardTitle className="flex items-center justify-between gap-3 text-base">
-                                <span>{selectedOpportunity.title}</span>
-                                <Badge variant="outline">
-                                  #{selectedOpportunity.id}
-                                </Badge>
-                              </CardTitle>
-                              <CardDescription>
-                                Selected opportunity context for the right-side
-                                copilot.
-                              </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                              <div className="grid gap-3 md:grid-cols-2">
-                                <DetailField
-                                  label="Type"
-                                  value={selectedOpportunity.type}
-                                />
-                                <DetailField
-                                  label="Ecosystem"
-                                  value={selectedOpportunity.ecosystem ?? "-"}
-                                />
-                                <DetailField
-                                  label="Amount"
-                                  value={selectedOpportunity.amount ?? "-"}
-                                />
-                                <DetailField
-                                  label="Deadline"
-                                  value={selectedOpportunity.deadline}
-                                />
-                                <DetailField
-                                  label="Source Trust"
-                                  value={
-                                    selectedOpportunity.source_trust ===
-                                    "official"
-                                      ? "Official"
-                                      : "Discovery"
-                                  }
-                                />
-                                <DetailField
-                                  label="Verification"
-                                  value={
-                                    selectedOpportunity.verification_verdict
-                                  }
-                                />
-                              </div>
-                              <div className="flex flex-wrap gap-3">
-                                <Button
-                                  disabled={isRunning}
-                                  onClick={() =>
-                                    void analyzeTarget({
-                                      event_id: selectedOpportunity.id,
-                                    })
-                                  }
-                                >
-                                  {isRunning
-                                    ? "Analyzing..."
-                                    : "Analyze Selected Opportunity"}
-                                </Button>
-                                <Button
-                                  disabled={isInvestigating}
-                                  variant="outline"
-                                  onClick={() =>
-                                    void investigateSelectedOpportunity(
-                                      selectedOpportunity.id
-                                    )
-                                  }
-                                >
-                                  {isInvestigating
-                                    ? "Investigating..."
-                                    : "Run Investigation"}
-                                </Button>
-                                {selectedOpportunity.apply_url ? (
-                                  <a
-                                    className="inline-flex items-center justify-center rounded-full border border-border px-4 py-2 text-sm font-medium hover:bg-accent"
-                                    href={selectedOpportunity.apply_url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                  >
-                                    Open Apply Link
-                                  </a>
-                                ) : null}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ) : null}
-                      </>
-                    )}
-                  </div>
-                ) : activeTab === "sourceHealth" ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h2 className="text-lg font-semibold text-foreground">
-                          Source Health
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                          Health signals for each fetch source in the pipeline.
-                        </p>
-                      </div>
-                      <Badge variant="outline">
-                        {sourceHealthData?.summary.total_sources ?? 0} sources
-                      </Badge>
-                    </div>
-
-                    {sourceHealthError ? (
-                      <EmptyState
-                        title="Source health load failed"
-                        description={sourceHealthError}
-                        icon={<ShieldCheck className="h-5 w-5 text-primary" />}
-                        actionLabel="Retry"
-                        onAction={() => void loadSourceHealthData()}
-                      />
-                    ) : isSourceHealthLoading ? (
-                      <EmptyState
-                        title="Loading source health"
-                        description="Fetching latest source health records..."
-                        icon={<ShieldCheck className="h-5 w-5 text-primary" />}
-                      />
-                    ) : !sourceHealthData?.items.length ? (
-                      <EmptyState
-                        title="No source health data yet"
-                        description="The source health table is empty right now."
-                        icon={<ShieldCheck className="h-5 w-5 text-primary" />}
-                      />
-                    ) : (
-                      <>
-                        <div className="grid gap-4 md:grid-cols-4">
-                          <MetricCard
-                            label="Total Sources"
-                            value={sourceHealthData.summary.total_sources}
-                          />
-                          <MetricCard
-                            label="Healthy"
-                            value={sourceHealthData.summary.healthy}
-                          />
-                          <MetricCard
-                            label="Degraded"
-                            value={sourceHealthData.summary.degraded}
-                          />
-                          <MetricCard
-                            label="Down"
-                            value={sourceHealthData.summary.down}
-                          />
-                        </div>
-                        <div className="overflow-x-auto rounded-3xl border border-border/70">
-                          <table className="min-w-full divide-y divide-border text-sm">
-                            <thead className="bg-muted/60 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                              <tr>
-                                <th className="px-4 py-3">Source</th>
-                                <th className="px-4 py-3">Status</th>
-                                <th className="px-4 py-3">Last Success</th>
-                                <th className="px-4 py-3">Last Fetch</th>
-                                <th className="px-4 py-3">Failures</th>
-                                <th className="px-4 py-3">Last Error</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border bg-background/40">
-                              {sourceHealthData.items.map((item) => (
-                                <tr
-                                  key={item.source}
-                                  className="hover:bg-accent/50"
-                                >
-                                  <td className="px-4 py-3 font-medium text-foreground">
-                                    {item.source}
-                                  </td>
-                                  <td className="px-4 py-3 text-muted-foreground">
-                                    {item.status}
-                                  </td>
-                                  <td className="px-4 py-3 text-muted-foreground">
-                                    {item.last_success}
-                                  </td>
-                                  <td className="px-4 py-3 text-muted-foreground">
-                                    {item.last_fetch}
-                                  </td>
-                                  <td className="px-4 py-3 text-muted-foreground">
-                                    {item.failures}
-                                  </td>
-                                  <td className="px-4 py-3 text-muted-foreground">
-                                    {item.last_error || "-"}
+                                        <MessageSquare className="h-4 w-4" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        aria-label="Verify"
+                                        title="Verify"
+                                        disabled={verifyingEventId === item.id}
+                                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                                        onClick={() => {
+                                          setSelectedOpportunity(item);
+                                          void analyzeTarget({
+                                            event_id: item.id,
+                                          });
+                                          window.requestAnimationFrame(() => {
+                                            scrollToRelatedPanel(
+                                              resultsSectionRef.current
+                                            );
+                                          });
+                                        }}
+                                      >
+                                        <SearchCheck className="h-4 w-4" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        aria-label="Delete"
+                                        title="Delete"
+                                        disabled={deletingEventId === item.id}
+                                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                                        onClick={() =>
+                                          void deleteOpportunity(item)
+                                        }
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <h2 className="text-lg font-semibold text-foreground">
-                          Schedule Logs
-                        </h2>
-                        <p className="text-sm text-muted-foreground">
-                          Recent scheduler runs and processing counters.
-                        </p>
-                      </div>
-                      <Badge variant="outline">
-                        {scheduleLogsData?.summary.total_runs ?? 0} runs
-                      </Badge>
+                              );
+                            })}
+                        </tbody>
+                      </table>
                     </div>
-
-                    {scheduleLogsError ? (
-                      <EmptyState
-                        title="Schedule logs load failed"
-                        description={scheduleLogsError}
-                        icon={<Activity className="h-5 w-5 text-primary" />}
-                        actionLabel="Retry"
-                        onAction={() => void loadScheduleLogsData()}
-                      />
-                    ) : isScheduleLogsLoading ? (
-                      <EmptyState
-                        title="Loading schedule logs"
-                        description="Fetching recent scheduler runs..."
-                        icon={<Activity className="h-5 w-5 text-primary" />}
-                      />
-                    ) : !scheduleLogsData?.items.length ? (
-                      <EmptyState
-                        title="No schedule logs yet"
-                        description="The schedule log table is empty right now."
-                        icon={<Activity className="h-5 w-5 text-primary" />}
-                      />
-                    ) : (
-                      <>
-                        <div className="grid gap-4 md:grid-cols-4">
-                          <MetricCard
-                            label="Total Runs"
-                            value={scheduleLogsData.summary.total_runs}
-                          />
-                          <MetricCard
-                            label="Success"
-                            value={scheduleLogsData.summary.success}
-                          />
-                          <MetricCard
-                            label="Failed"
-                            value={scheduleLogsData.summary.failed}
-                          />
-                          <MetricCard
-                            label="Running"
-                            value={scheduleLogsData.summary.running}
-                          />
-                        </div>
-                        <div className="overflow-x-auto rounded-3xl border border-border/70">
-                          <table className="min-w-full divide-y divide-border text-sm">
-                            <thead className="bg-muted/60 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                              <tr>
-                                <th className="px-4 py-3">Job</th>
-                                <th className="px-4 py-3">Status</th>
-                                <th className="px-4 py-3">Started</th>
-                                <th className="px-4 py-3">Fetched</th>
-                                <th className="px-4 py-3">New</th>
-                                <th className="px-4 py-3">Deduped</th>
-                                <th className="px-4 py-3">Verified</th>
-                                <th className="px-4 py-3">Error</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border bg-background/40">
-                              {scheduleLogsData.items.map((item) => (
-                                <tr
-                                  key={item.id}
-                                  className="hover:bg-accent/50"
-                                >
-                                  <td className="px-4 py-3 font-medium text-foreground">
-                                    {item.job}
-                                  </td>
-                                  <td className="px-4 py-3 text-muted-foreground">
-                                    {item.status}
-                                  </td>
-                                  <td className="px-4 py-3 text-muted-foreground">
-                                    {item.started}
-                                  </td>
-                                  <td className="px-4 py-3 text-muted-foreground">
-                                    {item.fetched}
-                                  </td>
-                                  <td className="px-4 py-3 text-muted-foreground">
-                                    {item.new}
-                                  </td>
-                                  <td className="px-4 py-3 text-muted-foreground">
-                                    {item.deduped}
-                                  </td>
-                                  <td className="px-4 py-3 text-muted-foreground">
-                                    {item.verified}
-                                  </td>
-                                  <td className="px-4 py-3 text-muted-foreground">
-                                    {item.error || "-"}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </>
-                    )}
-                  </div>
+                  </>
                 )}
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            ) : activeTab === "sourceHealth" ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold text-foreground">
+                    {sourceHealthData?.summary.total_sources ?? 0} sources
+                  </h2>
+                </div>
 
-          <div ref={resultsSectionRef}>
-            <ResultPanels
-              data={result}
-              investigation={investigation}
-              isRunning={isRunning}
-              isInvestigating={isInvestigating}
-            />
-          </div>
+                {sourceHealthError ? (
+                  <EmptyState
+                    title="Source health load failed"
+                    description={sourceHealthError}
+                    icon={<ShieldCheck className="h-5 w-5 text-primary" />}
+                    actionLabel="Retry"
+                    onAction={() => void loadSourceHealthData()}
+                  />
+                ) : isSourceHealthLoading ? (
+                  <EmptyState
+                    title="Loading source health"
+                    description="Fetching latest source health records..."
+                    icon={<ShieldCheck className="h-5 w-5 text-primary" />}
+                  />
+                ) : !sourceHealthData?.items.length ? (
+                  <EmptyState
+                    title="No source health data yet"
+                    description="The source health table is empty right now."
+                    icon={<ShieldCheck className="h-5 w-5 text-primary" />}
+                  />
+                ) : (
+                  <>
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <MetricCard
+                        label="Total Sources"
+                        value={sourceHealthData.summary.total_sources}
+                      />
+                      <MetricCard
+                        label="Healthy"
+                        value={sourceHealthData.summary.healthy}
+                        variant="success"
+                        icon={CheckCircle2}
+                      />
+                      <MetricCard
+                        label="Degraded"
+                        value={sourceHealthData.summary.degraded}
+                        variant="warning"
+                      />
+                      <MetricCard
+                        label="Down"
+                        value={sourceHealthData.summary.down}
+                        variant="danger"
+                        icon={XCircle}
+                      />
+                    </div>
+                    <div className="overflow-x-auto rounded-3xl border border-border/70">
+                      <table className="min-w-full divide-y divide-border text-sm">
+                        <thead className="bg-muted/60 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                          <tr>
+                            <th className="px-4 py-3">Source</th>
+                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3">Last Success</th>
+                            <th className="px-4 py-3">Last Fetch</th>
+                            <th className="px-4 py-3">Failures</th>
+                            <th className="px-4 py-3">Last Error</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border bg-background/40">
+                          {sourceHealthData.items.map((item) => (
+                            <tr
+                              key={item.source}
+                              className="hover:bg-accent/50"
+                            >
+                              <td className="px-4 py-3 font-medium text-foreground">
+                                {item.source}
+                              </td>
+                              <td className="px-4 py-3">
+                                <SourceStatusBadge status={item.status} />
+                              </td>
+                              <td className="px-4 py-3 text-muted-foreground">
+                                {item.last_success}
+                              </td>
+                              <td className="px-4 py-3 text-muted-foreground">
+                                {item.last_fetch}
+                              </td>
+                              <td className="px-4 py-3 text-muted-foreground">
+                                {item.failures}
+                              </td>
+                              <td className="px-4 py-3 text-muted-foreground">
+                                {item.last_error || "-"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold text-foreground">
+                    {scheduleLogsData?.summary.total_runs ?? 0} runs
+                  </h2>
+                </div>
+
+                {scheduleLogsError ? (
+                  <EmptyState
+                    title="Schedule logs load failed"
+                    description={scheduleLogsError}
+                    icon={<Activity className="h-5 w-5 text-primary" />}
+                    actionLabel="Retry"
+                    onAction={() => void loadScheduleLogsData()}
+                  />
+                ) : isScheduleLogsLoading ? (
+                  <EmptyState
+                    title="Loading schedule logs"
+                    description="Fetching recent scheduler runs..."
+                    icon={<Activity className="h-5 w-5 text-primary" />}
+                  />
+                ) : !scheduleLogsData?.items.length ? (
+                  <EmptyState
+                    title="No schedule logs yet"
+                    description="The schedule log table is empty right now."
+                    icon={<Activity className="h-5 w-5 text-primary" />}
+                  />
+                ) : (
+                  <>
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <MetricCard
+                        label="Total Runs"
+                        value={scheduleLogsData.summary.total_runs}
+                        icon={Activity}
+                      />
+                      <MetricCard
+                        label="Success"
+                        value={scheduleLogsData.summary.success}
+                        variant="success"
+                        icon={CheckCircle2}
+                      />
+                      <MetricCard
+                        label="Failed"
+                        value={scheduleLogsData.summary.failed}
+                        variant="danger"
+                        icon={XCircle}
+                      />
+                      <MetricCard
+                        label="Running"
+                        value={scheduleLogsData.summary.running}
+                        variant="warning"
+                        icon={CircleDashed}
+                      />
+                    </div>
+                    <div className="overflow-x-auto rounded-3xl border border-border/70">
+                      <table className="min-w-full divide-y divide-border text-sm">
+                        <thead className="bg-muted/60 text-left text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                          <tr>
+                            <th className="px-4 py-3">Job</th>
+                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3">Started</th>
+                            <th className="px-4 py-3">Fetched</th>
+                            <th className="px-4 py-3">New</th>
+                            <th className="px-4 py-3">Deduped</th>
+                            <th className="px-4 py-3">Verified</th>
+                            <th className="px-4 py-3">Error</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border bg-background/40">
+                          {scheduleLogsData.items.map((item) => (
+                            <tr key={item.id} className="hover:bg-accent/50">
+                              <td className="px-4 py-3 font-medium text-foreground">
+                                {item.job}
+                              </td>
+                              <td className="px-4 py-3">
+                                <SourceStatusBadge status={item.status} />
+                              </td>
+                              <td className="px-4 py-3 text-muted-foreground">
+                                {item.started}
+                              </td>
+                              <td className="px-4 py-3 text-muted-foreground">
+                                {item.fetched}
+                              </td>
+                              <td className="px-4 py-3 text-muted-foreground">
+                                {item.new}
+                              </td>
+                              <td className="px-4 py-3 text-muted-foreground">
+                                {item.deduped}
+                              </td>
+                              <td className="px-4 py-3 text-muted-foreground">
+                                {item.verified}
+                              </td>
+                              <td className="px-4 py-3 text-muted-foreground">
+                                {item.error || "-"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <div ref={resultsSectionRef}>
+          <ResultPanels
+            data={result}
+            investigation={investigation}
+            isRunning={verifyingEventId !== null}
+            isInvestigating={isInvestigating}
+          />
         </div>
       </div>
       <CopilotDrawer
@@ -1508,31 +1373,71 @@ export default function AgentChat() {
   );
 }
 
-function MetricCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
+function SourceStatusBadge({ status }: { status: string }) {
+  const s = status.toLowerCase();
+  const variant =
+    s === "healthy"
+      ? ("success" as const)
+      : s === "degraded"
+        ? ("warning" as const)
+        : ("danger" as const);
+  const colors = {
+    success: "bg-emerald-100 text-emerald-700",
+    warning: "bg-amber-100 text-amber-700",
+    danger: "bg-rose-100 text-rose-700",
+  };
   return (
-    <Card className="border-border/70 bg-card/95 shadow-sm">
-      <CardHeader className="pb-2">
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-3xl tracking-[-0.04em]">{value}</CardTitle>
-      </CardHeader>
-    </Card>
+    <span
+      className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${colors[variant]}`}
+    >
+      {status}
+    </span>
   );
 }
 
-function DetailField({ label, value }: { label: string; value: string }) {
+function MetricCard({
+  label,
+  value,
+  icon: Icon,
+  variant = "default",
+}: {
+  label: string;
+  value: string | number;
+  icon?: React.ComponentType<{ className?: string }>;
+  variant?: "default" | "success" | "warning" | "danger";
+}) {
+  const variantStyles = {
+    default: "",
+    success: "border-l-[3px] border-l-emerald-500",
+    warning: "border-l-[3px] border-l-amber-500",
+    danger: "border-l-[3px] border-l-rose-500",
+  };
+
+  const iconVariantStyles = {
+    default: "text-muted-foreground",
+    success: "text-emerald-500",
+    warning: "text-amber-500",
+    danger: "text-rose-500",
+  };
+
   return (
-    <div className="rounded-2xl border border-border/70 bg-card p-3">
-      <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-        {label}
-      </div>
-      <div className="mt-2 text-sm font-medium text-foreground">{value}</div>
-    </div>
+    <Card
+      className={`group border-border/70 bg-card/95 shadow-sm transition-shadow hover:shadow-md ${variantStyles[variant]}`}
+    >
+      <CardContent className="px-4 py-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
+            {label}
+          </p>
+          {Icon ? (
+            <Icon className={`h-4 w-4 ${iconVariantStyles[variant]}`} />
+          ) : null}
+        </div>
+        <p className="mt-1 text-xl font-semibold tracking-[-0.03em] tabular-nums">
+          {value}
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 

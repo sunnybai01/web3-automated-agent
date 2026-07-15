@@ -1,11 +1,16 @@
 """Zero-trust verification orchestrator — runs all three layers sequentially.
 
-Each layer is a gate:
-- Layer 1 fails → immediate rejection (fraud)
-- Layer 2 fails → degraded (logged but may still pass with warning)
-- Layer 3 fails → immediate rejection (fraud)
+Verification strategy (content-first, not domain-whitelist):
+- Layer 1 (origin anchor): checks domain/handle against known-good registry.
+  Degrades confidence but does NOT reject — domains not in the registry
+  are simply unknown, not fraudulent.
+- Layer 2 (cross-reference): looks for corroborating evidence on GitHub,
+  DoraHacks, Devpost. Degrades confidence on failure.
+- Layer 3 (security API): GoPlus / CertiK / ScamSniffer threat intelligence.
+  THIS is the only hard rejection gate — actual phishing/scam detection.
 
-A verification is only "fully verified" if all three layers pass.
+A verification is "verified" when L3 passes (not flagged as phishing/scam).
+L1/L2 failures only degrade the confidence level, never reject.
 """
 import logging
 from typing import Dict, Any
@@ -32,11 +37,14 @@ def _build_source_context(metadata: dict | None) -> Dict[str, Any]:
 class Verifier:
     """Runs the three-layer zero-trust verification pipeline.
 
+    Only Layer 3 (security API threat intel) can reject as fraud.
+    L1/L2 provide confidence signals but are non-fatal.
+
     Usage:
         v = Verifier()
         result = v.verify(event_type="BOUNTY", source_url="...", application_url="...")
-        if result["is_verified"]:
-            # proceed to scoring
+        if result["verdict"] != "fraud":
+            # proceed to scoring (may be "verified" or "degraded")
     """
 
     def verify(
@@ -50,7 +58,7 @@ class Verifier:
         """Run the full verification pipeline.
 
         Returns a dict with:
-          - is_verified: bool
+          - is_verified: bool (true unless L3 flags as fraud)
           - verification_log: dict with per-layer results
           - verdict: "verified" | "degraded" | "fraud"
         """
@@ -62,33 +70,9 @@ class Verifier:
         verification_log["source_context"] = source_context
 
         # ---- Layer 1: Origin Identity Anchoring ----
+        # Non-fatal: only degrades confidence, never rejects.
         l1 = origin_check(source_url, source_name)
         verification_log["layers"]["origin_anchor"] = l1
-
-        if not l1["passed"]:
-            # Layer 1 failure = immediate fraud classification
-            # UNLESS the source is a well-known platform (e.g., RSS feed itself is trusted)
-            is_registry_official = source_context.get("official") or source_context.get("source_tier") == "official"
-            if "immunefi.com" in source_url or "gitcoin.co" in source_url:
-                # Known platforms get a pass on L1 when the URL comes from their own domain
-                verification_log["layers"]["origin_anchor"]["overridden"] = True
-                verification_log["layers"]["origin_anchor"]["passed"] = True
-                verification_log["layers"]["origin_anchor"]["reason"] = (
-                    f"{l1.get('reason', 'origin failed')}; overridden by trusted platform allowlist"
-                )
-            elif is_registry_official:
-                verification_log["layers"]["origin_anchor"]["overridden"] = True
-                verification_log["layers"]["origin_anchor"]["passed"] = True
-                verification_log["layers"]["origin_anchor"]["reason"] = (
-                    f"{l1.get('reason', 'origin failed')}; overridden by approved official source registry"
-                )
-            else:
-                verification_log["verdict"] = "fraud"
-                return {
-                    "is_verified": False,
-                    "verification_log": verification_log,
-                    "verdict": "fraud",
-                }
 
         # ---- Layer 2: Cross-Reference ----
         l2 = cross_reference_check(
@@ -97,7 +81,8 @@ class Verifier:
         verification_log["layers"]["cross_reference"] = l2
         # L2 failure is non-fatal — it degrades confidence but doesn't reject
 
-        # ---- Layer 3: Security API Checks ----
+        # ---- Layer 3: Security API Checks (THE ONLY HARD GATE) ----
+        # GoPlus / CertiK / ScamSniffer — actual phishing/scam detection
         check_url = application_url or source_url
         l3 = security_api_check(check_url)
         verification_log["layers"]["security_api"] = l3
@@ -110,12 +95,9 @@ class Verifier:
                 "verdict": "fraud",
             }
 
-        # All layers passed (or L2 degraded)
-        all_l2_passed = l2.get("passed", False)
-        if all_l2_passed and l1["passed"] and l3["passed"]:
-            verification_log["verdict"] = "verified"
-        else:
-            verification_log["verdict"] = "degraded"
+        # L3 passed → not fraud. Confidence depends on L1/L2.
+        all_passed = l1["passed"] and l2.get("passed", False) and l3["passed"]
+        verification_log["verdict"] = "verified" if all_passed else "degraded"
 
         return {
             "is_verified": True,  # Not fraud — degraded still passes to scoring

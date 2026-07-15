@@ -76,6 +76,30 @@ class VectorStore:
         except Exception as e:
             logger.error(f"ChromaDB delete failed for {doc_id}: {e}")
 
+    def delete_batch(self, doc_ids: list[str]):
+        """Delete multiple vectors by their doc IDs."""
+        if not doc_ids:
+            return
+        try:
+            self._collection.delete(ids=doc_ids)
+            logger.info(f"ChromaDB batch delete: {len(doc_ids)} vectors removed")
+        except Exception as e:
+            logger.error(f"ChromaDB batch delete failed: {e}")
+
+    def clear_all(self):
+        """Drop and recreate the collection, removing all vectors."""
+        try:
+            self._client.delete_collection(name=self.COLLECTION_NAME)
+            logger.info(f"ChromaDB collection '{self.COLLECTION_NAME}' deleted")
+        except Exception:
+            logger.warning("ChromaDB collection delete failed (may not exist)")
+
+        self._collection = self._client.get_or_create_collection(
+            name=self.COLLECTION_NAME,
+            metadata={"hnsw:space": "cosine"},
+        )
+        logger.info("ChromaDB collection recreated — all vectors cleared")
+
     def purge_older_than(self, days: int):
         """Remove vectors older than N days (sliding window cleanup).
 

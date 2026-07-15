@@ -132,7 +132,6 @@ class DashboardOpportunityMetrics(BaseModel):
     avg_score: float
     verified_percent: int
     grants: int
-    bounties: int
     hackathons: int
     official: int
     discovery: int
@@ -141,6 +140,12 @@ class DashboardOpportunityMetrics(BaseModel):
 class DashboardOpportunitiesResponse(BaseModel):
     metrics: DashboardOpportunityMetrics
     items: list[DashboardOpportunityItem]
+
+
+class DeleteOpportunityResponse(BaseModel):
+    status: str
+    event_id: int
+    deleted: bool
 
 
 class DashboardSourceHealthItem(BaseModel):
@@ -243,4 +248,18 @@ class ManualScanStatusResponse(BaseModel):
     finished_at: str = ""
     current_stage: str = ""
     schedules: list[ManualScanScheduleResult] = []
+
+
+class TavilyUnlockResponse(BaseModel):
+    status: str
+    unlocked_count: int
+    message: str = ""
+    error: str = ""
+
+
+class DedupResetResponse(BaseModel):
+    status: str
+    vectors_cleared: bool = False
+    signals_cleared: int = 0
+    message: str = ""
     error: str = ""

@@ -37,6 +37,7 @@ from src.db.queries import (
     create_daily_summary_log,
     mark_daily_summary_sent,
     mark_daily_summary_failed,
+    unlock_tavily_cooldown,
 )
 
 logging.basicConfig(
@@ -55,8 +56,9 @@ _classifier = None
 _scorer = None
 _slack = None
 _stats_reset_day = datetime.now(timezone.utc).day
-STALE_EVENT_MAX_AGE = timedelta(days=7)
-REQUIRED_TIME_WINDOW_FIELDS = ("start_date", "deadline")
+STALE_EVENT_MAX_AGE = timedelta(days=settings.STALE_MAX_AGE_DAYS)
+DATE_SCRAPE_TIMEOUT = settings.DATE_SCRAPE_TIMEOUT_SECONDS
+DATE_SCRAPE_MAX_CHARS = settings.DATE_SCRAPE_MAX_CHARS
 
 EVENT_MODEL_FIELDS = {
     "event_type",
@@ -131,26 +133,82 @@ def _published_at(item) -> datetime | None:
     return None
 
 
-def _staleness_reason(item, structured: dict | None, now: datetime | None = None) -> str | None:
+def _staleness_reason(
+    item, structured: dict | None, source_tier: str = "discovery", now: datetime | None = None
+) -> str | None:
+    """Check if an opportunity is *definitely* expired and should be dropped.
+
+    Strategy (relaxed):
+    - deadline present AND in the past → definitely expired, drop
+    - discovery source with no published date AND no deadline → too uncertain, drop
+    - discovery source published >60 days ago with no deadline → likely stale, drop
+    - official source → never dropped for staleness (could be rolling)
+    """
     now = now or datetime.now(timezone.utc)
     structured = structured or {}
+    tier = (source_tier or "discovery").lower()
 
-    published_at = _published_at(item)
-    if published_at is None:
-        return "missing_published_at"
-
-    for field_name in REQUIRED_TIME_WINDOW_FIELDS:
-        if _parse_datetime(structured.get(field_name)) is None:
-            return f"missing_{field_name}"
-
-    if published_at is not None and now - published_at > STALE_EVENT_MAX_AGE:
-        return "published_too_old"
-
+    # If we have a deadline and it's in the past → definitely expired
     deadline = _parse_datetime(structured.get("deadline"))
     if deadline is not None and deadline < now:
         return "deadline_expired"
 
+    # Official sources are always kept (their announcements are assumed rolling
+    # when no explicit deadline is given).
+    if tier == "official":
+        return None
+
+    published_at = _published_at(item)
+
+    # Discovery source with zero time information → too uncertain
+    if published_at is None and deadline is None:
+        return "missing_published_at"
+
+    # Discovery source published long ago and we still can't find a deadline
+    if published_at is not None and deadline is None:
+        if now - published_at > STALE_EVENT_MAX_AGE:
+            return "published_too_old"
+
     return None
+
+
+def _try_extract_dates_from_url(url: str, llm: LLMGateway) -> dict | None:
+    """Lightweight secondary scrape: fetch a URL and ask LLM to extract dates.
+
+    Used when the initial classification didn't find a deadline but the
+    source URL points to a page that likely contains time-window info.
+    """
+    if not url:
+        return None
+
+    try:
+        import httpx
+        from bs4 import BeautifulSoup
+
+        resp = httpx.get(url, timeout=DATE_SCRAPE_TIMEOUT, follow_redirects=True,
+                         headers={"User-Agent": "Web3Agent/1.0"})
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "lxml")
+
+        container = soup.find("article") or soup.find("main") or soup.body
+        if not container:
+            return None
+        text = container.get_text(separator="\n", strip=True)[:DATE_SCRAPE_MAX_CHARS]
+
+        prompt = (
+            "Extract ONLY the published date and application deadline from this web page. "
+            "Return JSON with no extra text:\n"
+            '{"published_date": "ISO 8601 or null", "deadline": "ISO 8601 or null"}\n\n'
+            f"Page text:\n{text}"
+        )
+        result = llm.classify_structured(
+            "You extract dates from web pages. Only output JSON.",
+            prompt,
+        )
+        return result if isinstance(result, dict) else None
+    except Exception:
+        logger.debug("Secondary date extraction skipped or failed for %s", url)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +293,25 @@ def run_pipeline(schedule: str):
                 continue
             stats["classified"] += 1
 
-            staleness_reason = _staleness_reason(item, structured)
+            source_tier = str(item.metadata.get("source_tier", "discovery"))
+
+            # --- Phase 3.5: Secondary date extraction ---
+            # When the initial classification couldn't find a deadline, try
+            # scraping the source URL to extract time-window information.
+            if not _parse_datetime(structured.get("deadline")) and item.raw_url:
+                extra_dates = _try_extract_dates_from_url(item.raw_url, _classifier.llm)
+                if extra_dates:
+                    for field in ("published_date", "deadline"):
+                        val = extra_dates.get(field)
+                        if val and not structured.get(field):
+                            structured[field] = val
+                    # If we got a published date, also feed it into item metadata
+                    # so _published_at can pick it up.
+                    pub = extra_dates.get("published_date")
+                    if pub and not _published_at(item):
+                        item.metadata["published_date"] = pub
+
+            staleness_reason = _staleness_reason(item, structured, source_tier=source_tier)
             if staleness_reason:
                 logger.info("[%s] Skip stale item from %s: %s", schedule, item.source_name, staleness_reason)
                 continue
@@ -421,9 +497,24 @@ def main():
     init_db()
     logger.info("Database initialized")
 
+    def _tavily_unlock() -> int:
+        """Unlock all Tavily cooldowns — called by midnight scheduler job."""
+        with SessionLocal() as db:
+            count = unlock_tavily_cooldown(db)
+            db.commit()
+        logger.info("Midnight unlock: reset %d tavily source(s)", count)
+        return count
+
     # Create scheduler
     scheduler = create_scheduler()
-    register_jobs(scheduler, run_pipeline, run_heartbeat, run_social_watch, run_daily_summary)
+    register_jobs(
+        scheduler,
+        run_pipeline,
+        run_heartbeat,
+        run_social_watch,
+        run_daily_summary,
+        tavily_unlock_fn=lambda: _tavily_unlock(),
+    )
     scheduler.start()
     logger.info("Scheduler started — waiting for jobs...")
 
